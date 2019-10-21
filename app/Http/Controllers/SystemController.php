@@ -45,9 +45,13 @@ class SystemController extends Controller
         $permissions = [];
         foreach (config('installer.permissions') as $perm_path => $perm_value) {
             $path = base_path($perm_path);
+            $value = '';
+            if (file_exists($path)) {
+                $value = substr(sprintf('%o', fileperms($path)), -4);
+            }
             $permissions[$perm_path] = [
                 'status' => \Helper::isFolderWritable($path),
-                'value'  => substr(sprintf('%o', fileperms($path)), -4),
+                'value'  => $value,
             ];
         }
         // Check if public symlink exists, if not, try to create.
@@ -63,9 +67,13 @@ class SystemController extends Controller
             }
         }
 
+        // Check if .env is writable.
+        $env_is_writable = is_writable(base_path('.env'));
+
         // Jobs
         $queued_jobs = \App\Job::orderBy('created_at', 'desc')->get();
         $failed_jobs = \App\FailedJob::orderBy('failed_at', 'desc')->get();
+        $failed_queues = $failed_jobs->pluck('queue')->unique();
 
         // Commands
         $commands_list = ['freescout:fetch-emails', 'queue:work'];
@@ -168,12 +176,34 @@ class SystemController extends Controller
             'commands'              => $commands,
             'queued_jobs'           => $queued_jobs,
             'failed_jobs'           => $failed_jobs,
+            'failed_queues'         => $failed_queues,
             'php_extensions'        => $php_extensions,
             'permissions'           => $permissions,
             'new_version_available' => $new_version_available,
             'latest_version'        => $latest_version,
             'public_symlink_exists' => $public_symlink_exists,
+            'env_is_writable'       => $env_is_writable,
         ]);
+    }
+
+    public function action(Request $request)
+    {
+        switch ($request->action) {
+            case 'delete_failed_jobs':
+                \App\FailedJob::where('queue', $request->failed_queue)->delete();
+                \Session::flash('flash_success_floating', __('Failed jobs deleted'));
+                break;
+
+            case 'retry_failed_jobs':
+                $jobs = \App\FailedJob::where('queue', $request->failed_queue)->get();
+                foreach ($jobs as $job) {
+                    \Artisan::call('queue:retry', ['id' => $job->id]);
+                }
+                \Session::flash('flash_success_floating', __('Failed jobs restarted'));
+                break;
+        }
+
+        return redirect()->route('system');
     }
 
     /**

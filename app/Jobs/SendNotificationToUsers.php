@@ -16,6 +16,9 @@ class SendNotificationToUsers implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    // Max retries + 1
+    public $tries = 6;
+
     public $users;
 
     public $conversation;
@@ -68,21 +71,39 @@ class SendNotificationToUsers implements ShouldQueue
         $global_exception = null;
 
         foreach ($this->users as $user) {
+
+            // If for one user sending fails the job is marked as failed and retried after some time.
+            // So we have to check if notification email has already been successfully sent to this user.
+            if ($this->attempts() > 1) {
+                // Maybe add indexes to the table.
+                $already_sent = SendLog::where('thread_id', $last_thread->id)
+                    ->where('mail_type', SendLog::MAIL_TYPE_USER_NOTIFICATION)
+                    ->where('user_id', $user->id)
+                    ->whereIn('status', SendLog::$sent_success)
+                    ->exists();
+                if ($already_sent) {
+                    continue;
+                }
+            }
+
             $message_id = \App\Misc\Mail::MESSAGE_ID_PREFIX_NOTIFICATION.'-'.$last_thread->id.'-'.$user->id.'-'.time().'@'.$mailbox->getEmailDomain();
             $headers['Message-ID'] = $message_id;
 
-            // If this is notification on message from customer set customer as sender name
+            // If this is notification on message from customer, set customer as sender name
             $from_name = '';
             if ($last_thread->type == Thread::TYPE_CUSTOMER) {
                 $from_name = $last_thread->customer->getFullName();
                 if ($from_name) {
-                    $from_name = $from_name.' '.__('via').' '.\Config::get('app.name');
+                    $from_name = $from_name.' '.__('via').' '.$mailbox->name;
                 }
             }
             if (!$from_name) {
-                $from_name = \Config::get('app.name');
+                $from_name = $mailbox->name;
             }
             $from = ['address' => $mailbox->email, 'name' => $from_name];
+
+            // Set user language
+            app()->setLocale($user->getLocale());
 
             $exception = null;
 
@@ -122,7 +143,17 @@ class SendNotificationToUsers implements ShouldQueue
         }
 
         if ($global_exception) {
-            throw $global_exception;
+            // Retry job with delay.
+            // https://stackoverflow.com/questions/35258175/how-can-i-create-delays-between-failed-queued-job-attempts-in-laravel
+            if ($this->attempts() < $this->tries) {
+                $this->release(3600);
+
+                throw $global_exception;
+            } else {
+                $this->fail($global_exception);
+
+                return;
+            }
         }
     }
 

@@ -21,8 +21,8 @@
 		</style>
 	<![endif]-->
 </head>
-<body bgcolor="#f1f3f4" style="-webkit-text-size-adjust:none; margin: 0;">
-	<table bgcolor="#f1f3f4" cellspacing="0" border="0" cellpadding="0" width="100%">
+<body bgcolor="#f8f9f9" style="-webkit-text-size-adjust:none; margin: 0;">
+	<table bgcolor="#f8f9f9" cellspacing="0" border="0" cellpadding="0" width="100%">
 		<tr>
 			<td>
 				<table class="content" width="100%" border="0" cellspacing="0" cellpadding="0">
@@ -69,6 +69,8 @@
 			                                    @elseif ($thread->action_type == App\Thread::ACTION_TYPE_USER_CHANGED)
 				                                    <strong>@include('emails/user/thread_by')</strong>  
 													{{ __("assigned to :person conversation", ['person' => $thread->getAssigneeName(false, $user)]) }}
+			                                    @elseif ($thread->type == App\Thread::TYPE_NOTE)
+			                                    	{!! __(":person added a note to conversation", ['person' => '<strong>'.$thread->getCreatedBy()->getFullName(true).'</strong>']) !!}
 			                                    @else
 			                                    	{!! __(":person replied to conversation", ['person' => '<strong>'.$thread->getCreatedBy()->getFullName(true).'</strong>']) !!}
 			                                    @endif
@@ -145,25 +147,36 @@
 								<td>
 									<table width="100%" border="0" cellspacing="0" cellpadding="0" style="border-bottom:1px solid #dde3e7;">
 									    <tr>
-									        <td style="padding: 2em;" bgcolor="#ffffff">
+									        <td style="padding: 2em;" bgcolor="@if ($thread->type == App\Thread::TYPE_MESSAGE){{ config('app.colors')['bg_user_reply'] }}@elseif ($thread->type == App\Thread::TYPE_NOTE){{ config('app.colors')['bg_note'] }}@else{{ 'ffffff' }}@endif">
 									            <table width="100%" border="0" cellspacing="0" cellpadding="0">
 									                <tr>
 									                    <td>
-									                        <h3 style="font-family:Arial, 'Helvetica Neue', Helvetica, Tahoma, sans-serif; color:#8d959b; font-size:17px; line-height:22px; margin:0 0 2px 0; font-weight:normal;">
+									                        <h3 style="font-family:Arial, 'Helvetica Neue', Helvetica, Tahoma, sans-serif; font-size:17px; line-height:22px; margin:0 0 2px 0; font-weight:normal;">
 																@if ($thread->type == App\Thread::TYPE_NOTE)
 																	<span style="color:#e6b216">
 																		<strong style="color:#000000;">{{ $thread->getCreatedBy()->getFullName(true) }}</strong> {{ __('added a note') }}
 																	</span>
 																@else
-																	<strong style="color:#000000;">{{ $thread->getCreatedBy()->getFullName(true) }}</strong> @if ($loop->last){{ __('started the conversation') }}@else {{ __('replied') }} @endif
+																	@if ($thread->type == App\Thread::TYPE_MESSAGE)
+																		@php
+																			$action_color = config('app.colors')['text_user'];
+																		@endphp
+																	@else
+																		@php
+																			$action_color = config('app.colors')['text_customer'];
+																		@endphp
+																	@endif
+																	<span style="color:{{ $action_color }}">
+																		<strong style="color:#000000;">{{ $thread->getCreatedBy()->getFullName(true) }}</strong> @if ($loop->last){{ __('started the conversation') }}@else {{ __('replied') }} @endif
+																	</span>
 																@endif
 															</h3>
 
-															@if ($thread->type != App\Thread::TYPE_NOTE)
+															{{--@if ($thread->type != App\Thread::TYPE_NOTE)
 																<p style="display:inline; font-family:Arial, 'Helvetica Neue', Helvetica, Tahoma, sans-serif; color:#B5B9BD; font-size:11.5px; line-height:18px; margin:0;">
 															    	@if ($thread->user_id){{ __('Assigned:') }} {{ $thread->getAssigneeName(true, $user) }} &nbsp;&nbsp;&nbsp; @endif{{ __('Status:') }} {{ $thread->getStatusName() }}<br>
 															    </p>
-															@endif
+															@endif--}}
 									                    </td>
 									                    <td valign="top">
 									                        <div style="font-family:Arial, 'Helvetica Neue', Helvetica, Tahoma, sans-serif; color:#B5B9BD; font-size:12px; line-height:18px; margin:0;" align="right">{{ App\User::dateFormat($thread->created_at, 'M j, H:i', $user) }}</div>
@@ -212,13 +225,13 @@
 		{{-- footer --}}
 		<tr>
 			<td>
-				<table align="center" bgcolor="#f1f3f4" width="95%" border="0" cellspacing="0" cellpadding="0" style="max-width: 650px; margin: 0 auto;">
+				<table align="center" bgcolor="#f8f9f9" width="95%" border="0" cellspacing="0" cellpadding="0" style="max-width: 650px; margin: 0 auto;">
 					<tr>
 						<td height="22"></td>
 					</tr>
 					<tr>
 						<td align="center">
-							<p style="display:inline; margin:0; padding:0; font-size:12px; font-family:Arial, 'Helvetica Neue', Helvetica, Tahoma, sans-serif; color:#B5B9BD; line-height: 22px;" align="center"><a href="{{ route('users.notifications', ['id' => $user->id]) }}" style="color:#B5B9BD;">{{ __('Notification Settings') }}</a>{{-- - <a href="https://github.com/freescout-helpdesk/freescout/issues/26" style="color:#B5B9BD;">{{ __('Available email commands') }}</a>--}} - <a href="{{ config('app.freescout_url') }}" style="color:#B5B9BD;">{{ config('app.name') }}</a></p>
+							<p style="display:inline; margin:0; padding:0; font-size:12px; font-family:Arial, 'Helvetica Neue', Helvetica, Tahoma, sans-serif; color:#B5B9BD; line-height: 22px;" align="center"><a href="{{ route('users.notifications', ['id' => $user->id]) }}" style="color:#B5B9BD;">{{ __('Notification Settings') }}</a>{{-- - <a href="https://github.com/freescout-helpdesk/freescout/issues/26" style="color:#B5B9BD;">{{ __('Available email commands') }}</a>--}} - <a href="{{ $mailbox->url() }}" style="color:#B5B9BD;">{{ $mailbox->name }}</a></p>
 						</td>
 					</tr>
 					<tr>

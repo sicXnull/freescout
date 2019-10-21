@@ -47,8 +47,13 @@ class Mail
     public static $alternative_reply_separators = [
         self::REPLY_SEPARATOR_HTML, // Our HTML separator
         self::REPLY_SEPARATOR_TEXT, // Our plain text separator
+
+        // Email service providers specific separators.
         '<div class="gmail_quote">', // Gmail
         'yahoo_quoted_', // Yahoo, full: <div id=3D"ydp6h4f5c59yahoo_quoted_2937493705"
+        '------------------ 原始邮件 ------------------', // QQ
+
+        // General separators.
         '<blockquote', // General sepator
         '<!-- originalMessage -->',
         //'---Original---', // QQ separator, wait for emails from QQ and check
@@ -129,6 +134,11 @@ class Mail
             $vars['{%customer.fullName%}'] = $data['customer']->getFullName(true);
             $vars['{%customer.firstName%}'] = $data['customer']->getFirstName(true);
             $vars['{%customer.lastName%}'] = $data['customer']->last_name;
+        }
+        if (!empty($data['user'])) {
+            $vars['{%user.fullName%}'] = $data['user']->getFullName();
+            $vars['{%user.firstName%}'] = $data['user']->getFirstName();
+            $vars['{%user.lastName%}'] = $data['user']->last_name;
         }
 
         return strtr($text, $vars);
@@ -277,6 +287,18 @@ class Mail
     }
 
     /**
+     * Check if email format is valid.
+     *
+     * @param [type] $email [description]
+     *
+     * @return [type] [description]
+     */
+    public static function validateEmail($email)
+    {
+        return filter_var($email, FILTER_VALIDATE_EMAIL);
+    }
+
+    /**
      * Send system alert to super admin.
      */
     public static function sendAlertMail($text, $title = '')
@@ -352,5 +374,100 @@ class Mail
         }
 
         return '';
+    }
+
+    /**
+     * Detect autoresponder by headers.
+     * https://github.com/jpmckinney/multi_mail/wiki/Detecting-autoresponders
+     * https://www.jitbit.com/maxblog/18-detecting-outlook-autoreplyout-of-office-emails-and-x-auto-response-suppress-header/.
+     *
+     * @return bool [description]
+     */
+    public static function isAutoResponder($headers_str)
+    {
+        $autoresponder_headers = [
+            'x-autoreply'    => '',
+            'x-autorespond'  => '',
+            'auto-submitted' => 'auto-replied',
+        ];
+        $headers = explode("\n", $headers_str);
+
+        foreach ($autoresponder_headers as $auto_header => $auto_header_value) {
+            foreach ($headers as $header) {
+                $parts = explode(':', $header, 2);
+                if (count($parts) == 2) {
+                    $name = trim(strtolower($parts[0]));
+                    $value = trim($parts[1]);
+                } else {
+                    continue;
+                }
+                if (strtolower($name) == $auto_header) {
+                    if (!$auto_header_value) {
+                        return true;
+                    } elseif ($value == $auto_header_value) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check Content-Type header.
+     * This is not 100% reliable, detects only standard DSN bounces.
+     *
+     * @param [type] $headers [description]
+     *
+     * @return [type] [description]
+     */
+    public static function detectBounceByHeaders($headers)
+    {
+        if (preg_match("/Content-Type:((?:[^\n]|\n[\t ])+)(?:\n[^\t ]|$)/i", $headers, $match)
+            && preg_match("/multipart\/report/i", $match[1])
+            && preg_match("/report-type=[\"']?delivery-status[\"']?/i", $match[1])
+        ) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * Parse email headers.
+     *
+     * @param [type] $headers_str [description]
+     *
+     * @return [type] [description]
+     */
+    public static function parseHeaders($headers_str)
+    {
+        try {
+            return imap_rfc822_parse_headers($headers_str);
+        } catch (\Exception $e) {
+            return;
+        }
+    }
+
+    public static function getHeader($headers_str, $header)
+    {
+        $headers = self::parseHeaders($headers_str);
+        if (!$headers) {
+            return;
+        }
+        $value = null;
+        if (property_exists($headers, $header)) {
+            $value = $headers->$header;
+        } else {
+            return;
+        }
+        switch ($header) {
+            case 'message_id':
+                $value = str_replace(['<', '>'], '', $value);
+                break;
+        }
+
+        return $value;
     }
 }

@@ -16,6 +16,9 @@ class SendReplyToCustomer implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    // Number of retries + 1
+    public $tries = 6;
+
     public $conversation;
 
     public $threads;
@@ -102,6 +105,12 @@ class SendReplyToCustomer implements ShouldQueue
 
         $this->recipients = array_merge([$this->customer_email], $cc_array, $bcc_array);
 
+        // If sending fails, all recipiens fail.
+        // if ($this->attempts() > 1) {
+        //     $cc_array = [];
+        //     $bcc_array = [];
+        // }
+
         try {
             Mail::to([['name' => $this->customer->getFullName(), 'email' => $this->customer_email]])
                 ->cc($cc_array)
@@ -118,12 +127,28 @@ class SendReplyToCustomer implements ShouldQueue
                 ->log(\App\ActivityLog::DESCRIPTION_EMAILS_SENDING_ERROR_TO_CUSTOMER);
 
             // Failures will be saved to send log when retry attempts will finish
+            // Mail::failures() is empty in case of connection error.
             $this->failures = $this->recipients;
 
             // Save to send log
             $this->saveToSendLog($e->getMessage());
 
-            throw $e;
+            // Retry job with delay.
+            // https://stackoverflow.com/questions/35258175/how-can-i-create-delays-between-failed-queued-job-attempts-in-laravel
+            if ($this->attempts() < $this->tries) {
+                $this->release(3600);
+
+                throw $e;
+            } else {
+                $this->last_thread->send_status = SendLog::STATUS_SEND_ERROR;
+                $this->last_thread->updateSendStatusData(['msg' => $e->getMessage()]);
+                $this->last_thread->save();
+
+                // This executes $this->failed().
+                $this->fail($e);
+
+                return;
+            }
         }
 
         // In message_id we are storing Message-ID of the incoming email which created the thread

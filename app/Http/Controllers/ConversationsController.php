@@ -173,7 +173,7 @@ class ConversationsController extends Controller
     /**
      * New conversation.
      */
-    public function create($mailbox_id)
+    public function create(Request $request, $mailbox_id)
     {
         $mailbox = Mailbox::findOrFail($mailbox_id);
         $this->authorize('view', $mailbox);
@@ -186,8 +186,33 @@ class ConversationsController extends Controller
 
         $after_send = $mailbox->getUserSettings(auth()->user()->id)->after_send;
 
+        // Create conversation from thread
+        $thread = null;
+        if (!empty($request->from_thread_id)) {
+            $orig_thread = Thread::find($request->from_thread_id);
+            if ($orig_thread) {
+                $conversation->subject = $orig_thread->conversation->subject;
+                $conversation->subject = preg_replace('/^Fwd:/i', 'Re: ', $conversation->subject);
+
+                $thread = new \App\Thread();
+                $thread->body = $orig_thread->body;
+                // If this is a forwarded message, try to fetch From
+                preg_match_all("/From:[^<\n]+<([^<\n]+)>/m", html_entity_decode(strip_tags($thread->body)), $m);
+
+                if (!empty($m[1])) {
+                    foreach ($m[1] as $value) {
+                        if (\MailHelper::validateEmail($value)) {
+                            $thread->to = json_encode([$value]);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
         return view('conversations/create', [
             'conversation' => $conversation,
+            'thread'       => $thread,
             'mailbox'      => $mailbox,
             'folder'       => $folder,
             'folders'      => $mailbox->getAssesibleFolders(),
@@ -339,7 +364,7 @@ class ConversationsController extends Controller
                     $thread->save();
 
                     event(new ConversationStatusChanged($conversation));
-                    \Eventy::action('conversation.status_changed', $conversation);
+                    \Eventy::action('conversation.status_changed_by_user', $conversation, $user, false);
 
                     $response['status'] = 'success';
                     // Flash
@@ -500,11 +525,14 @@ class ConversationsController extends Controller
                         $conversation->last_reply_at = $now;
                         $conversation->last_reply_from = Conversation::PERSON_USER;
                         $conversation->user_updated_at = $now;
-                        $conversation->updateFolder();
                     }
+                    $conversation->updateFolder();
                     if ($from_draft) {
                         // Increment number of replies in conversation
                         $conversation->threads_count++;
+                        // We need to set preview here as when conversation is created from draft,
+                        // ThreadObserver::created() method is not called.
+                        $conversation->setPreview($request->body);
                     }
                     $conversation->save();
 
@@ -516,7 +544,7 @@ class ConversationsController extends Controller
                     if (!$new) {
                         if ($status_changed) {
                             event(new ConversationStatusChanged($conversation));
-                            \Eventy::action('conversation.status_changed', $conversation);
+                            \Eventy::action('conversation.status_changed_by_user', $conversation, $user, true);
                         }
                         if ($user_changed) {
                             event(new ConversationUserChanged($conversation, $user));
@@ -585,23 +613,21 @@ class ConversationsController extends Controller
                         Attachment::whereIn('id', $attachments_info['attachments'])->update(['thread_id' => $thread->id]);
                     }
 
-                    if ($new) {
+                    // When user creates a new conversation it may be saved as draft first.
+                    if ($new || ($from_draft && $conversation->threads_count == 1)) {
                         event(new UserCreatedConversation($conversation, $thread));
                         \Eventy::action('conversation.created_by_user_can_undo', $conversation, $thread);
                         // After Conversation::UNDO_TIMOUT period trigger final event.
-                        \App\Jobs\TriggerAction::dispatch('conversation.created_by_user', [$conversation, $thread])
-                            ->delay(now()->addSeconds(Conversation::UNDO_TIMOUT))
-                            ->onQueue('default');
+                        \Helper::backgroundAction('conversation.created_by_user', [$conversation, $thread], now()->addSeconds(Conversation::UNDO_TIMOUT));
                     } elseif ($is_note) {
                         event(new UserAddedNote($conversation, $thread));
-                        \Eventy::action('conversation.user_added_note', $conversation, $thread);
+                        \Eventy::action('conversation.note_added', $conversation, $thread);
                     } else {
+                        // Reply.
                         event(new UserReplied($conversation, $thread));
                         \Eventy::action('conversation.user_replied_can_undo', $conversation, $thread);
                         // After Conversation::UNDO_TIMOUT period trigger final event.
-                        \App\Jobs\TriggerAction::dispatch('conversation.user_replied', [$conversation, $thread])
-                            ->delay(now()->addSeconds(Conversation::UNDO_TIMOUT))
-                            ->onQueue('default');
+                        \Helper::backgroundAction('conversation.user_replied', [$conversation, $thread], now()->addSeconds(Conversation::UNDO_TIMOUT));
                     }
 
                     if (!empty($request->after_send) && $request->after_send == MailboxUser::AFTER_SEND_STAY) {
@@ -636,7 +662,7 @@ class ConversationsController extends Controller
                 }
                 break;
 
-            // Save draft (automatically or by click)
+            // Save draft (automatically or by click) of a new conversation or reply.
             case 'save_draft':
 
                 $mailbox = Mailbox::findOrFail($request->mailbox_id);
@@ -780,7 +806,7 @@ class ConversationsController extends Controller
                         Attachment::whereIn('id', $attachments_info['attachments'])->update(['thread_id' => $thread->id]);
                     }
 
-                    // Update folder coutner
+                    // Update folder counter.
                     $conversation->mailbox->updateFoldersCounters(Folder::TYPE_DRAFTS);
 
                     if ($new) {
@@ -975,6 +1001,9 @@ class ConversationsController extends Controller
                     $thread->created_by_user_id = $user->id;
                     $thread->save();
 
+                    // Remove conversation from drafts folder.
+                    $conversation->removeFromFolder(Folder::TYPE_DRAFTS);
+
                     // Recalculate only old and new folders
                     $conversation->mailbox->updateFoldersCounters();
 
@@ -985,6 +1014,7 @@ class ConversationsController extends Controller
                     \Session::flash('flash_success_floating', __('Conversation deleted'));
                 }
                 break;
+
             // Restore conversation
             case 'restore_conversation':
                 $conversation = Conversation::find($request->conversation_id);
@@ -1107,7 +1137,7 @@ class ConversationsController extends Controller
                         $thread->save();
 
                         event(new ConversationStatusChanged($conversation));
-                        \Eventy::action('conversation.status_changed', $conversation);
+                        \Eventy::action('conversation.status_changed_by_user', $conversation, $user, false);
                     }
 
                     $response['status'] = 'success';
@@ -1119,9 +1149,10 @@ class ConversationsController extends Controller
                 }
                 break;
 
-            // delete converations
+            // Delete converations.
             case 'bulk_delete_conversation':
                 $conversations = Conversation::findMany($request->conversation_id);
+                $mailboxes_to_recalculate = [];
 
                 foreach ($conversations as $conversation) {
                     if (!$user->can('delete', $conversation)) {
@@ -1134,13 +1165,34 @@ class ConversationsController extends Controller
                     $conversation->updateFolder();
                     $conversation->save();
 
-                    // Recalculate only old and new folders
-                    $conversation->mailbox->updateFoldersCounters();
+                    // Create lineitem thread
+                    $thread = new Thread();
+                    $thread->conversation_id = $conversation->id;
+                    $thread->user_id = $conversation->user_id;
+                    $thread->type = Thread::TYPE_LINEITEM;
+                    $thread->state = Thread::STATE_PUBLISHED;
+                    $thread->status = Thread::STATUS_NOCHANGE;
+                    $thread->action_type = Thread::ACTION_TYPE_DELETED_TICKET;
+                    $thread->source_via = Thread::PERSON_USER;
+                    $thread->source_type = Thread::SOURCE_TYPE_WEB;
+                    $thread->customer_id = $conversation->customer_id;
+                    $thread->created_by_user_id = $user->id;
+                    $thread->save();
 
-                    $response['status'] = 'success';
+                    // Remove conversation from drafts folder.
+                    $conversation->removeFromFolder(Folder::TYPE_DRAFTS);
 
-                    \Session::flash('flash_success_floating', __('Conversations deleted'));
+                    if (!array_key_exists($conversation->mailbox_id, $mailboxes_to_recalculate)) {
+                        $mailboxes_to_recalculate[$conversation->mailbox_id] = $conversation->mailbox;
+                    }
                 }
+                // Recalculate folders counters for mailboxes.
+                foreach ($mailboxes_to_recalculate as $mailbox) {
+                    $mailbox->updateFoldersCounters();
+                }
+
+                $response['status'] = 'success';
+                \Session::flash('flash_success_floating', __('Conversations deleted'));
                 break;
 
             default:

@@ -9,14 +9,14 @@
             <span class="heading">{{ __('Users') }}</span>
         </div>
         <div class="flexy-item margin-left">
-            <a href="{{ route('users.create') }}" class="btn btn-primary">{{ __('New User') }}</a>
+            <a href="{{ route('users.create') }}" class="btn btn-bordered">{{ __('New User') }}</a>
         </div>
         <div class="flexy-block"></div>
     </div>
 
     <div class="card-list margin-top">
         @foreach ($users as $user)
-            <a href="{{ route('users.profile', ['id'=>$user->id]) }}" class="card">
+            <a href="{{ route('users.profile', ['id'=>$user->id]) }}" class="card hover-shade @if ($user->invite_state != App\User::INVITE_STATE_ACTIVATED) card-inactive @endif">
                 @if ($user->photo_url)
                     <img src="{{ $user->getPhotoUrl() }}" />
                 @else

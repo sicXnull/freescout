@@ -9,14 +9,14 @@
             <span class="heading">{{ __('Mailboxes') }}</span>
         </div>
         <div class="flexy-item margin-left">
-            <a href="{{ route('mailboxes.create') }}" class="btn btn-primary">{{ __('New Mailbox') }}</a>
+            <a href="{{ route('mailboxes.create') }}" class="btn btn-bordered">{{ __('New Mailbox') }}</a>
         </div>
         <div class="flexy-block"></div>
     </div>
 
     <div class="card-list margin-top">
         @foreach ($mailboxes as $mailbox)
-            <a href="{{ route('mailboxes.update', ['id'=>$mailbox->id]) }}" class="card no-img  @if ($mailbox->isActive()) card-active @else card-inactive @endif">
+            <a href="{{ route('mailboxes.update', ['id'=>$mailbox->id]) }}" class="card no-img hover-shade @if ($mailbox->isActive()) card-active @else card-inactive @endif">
                 <h4>{{ $mailbox->name }}</h4>
                 <p>{{ $mailbox->email }}</p>
             </a>

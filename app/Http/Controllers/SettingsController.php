@@ -48,16 +48,7 @@ class SettingsController extends Controller
 
     public function getValidator($section)
     {
-        switch ($section) {
-            case 'emails':
-                $rules = [
-                    'settings.mail_from' => 'required|email',
-                ];
-                break;
-            // default:
-            //     $rules = \Event::fire('filter.settings_validate_rules');
-            //     break;
-        }
+        $rules = $this->getSectionParams($section, 'validator_rules');
 
         if (!empty($rules)) {
             return Validator::make(request()->all(), $rules);
@@ -66,22 +57,95 @@ class SettingsController extends Controller
 
     public function getTemplateVars($section, $template_vars)
     {
+        $section_vars = $this->getSectionParams($section, 'template_vars');
+
+        if ($section_vars && is_array($section_vars)) {
+            return array_merge($template_vars, $section_vars);
+        } else {
+            return $template_vars;
+        }
+    }
+
+    /**
+     * Parameters of the sections settings.
+     *
+     * If in settings parameter `env` is set, option will be saved into .env file
+     * instead of DB.
+     *
+     * @param [type] $section [description]
+     * @param string $param   [description]
+     *
+     * @return [type] [description]
+     */
+    public function getSectionParams($section, $param = '')
+    {
+        $params = [];
+
         switch ($section) {
             case 'emails':
-                $template_vars['sendmail_path'] = ini_get('sendmail_path');
-                $template_vars['mail_drivers'] = [
-                    'mail'     => __("PHP's mail() function"),
-                    'sendmail' => __('Sendmail'),
-                    'smtp'     => 'SMTP',
+                $params = [
+                    'template_vars' => [
+                        'sendmail_path' => ini_get('sendmail_path'),
+                        'mail_drivers'  => [
+                            'mail'     => __("PHP's mail() function"),
+                            'sendmail' => __('Sendmail'),
+                            'smtp'     => 'SMTP',
+                        ],
+                    ],
+                    'validator_rules' => [
+                        'settings.mail_from' => 'required|email',
+                    ],
                 ];
                 break;
+            case 'general':
+                $params = [
+                    'settings' => [
+                        'locale' => [
+                            'env' => 'APP_LOCALE',
+                        ],
+                        'timezone' => [
+                            'env' => 'APP_TIMEZONE',
+                        ],
+                    ],
+                ];
+                break;
+            case 'alerts':
+                $params = [
+                    'template_vars' => [
+                        'logs' => \App\ActivityLog::getAvailableLogs(),
+                    ],
+                    'settings' => [
+                        'alert_logs' => [
+                            'env' => 'APP_ALERT_LOGS',
+                        ],
+                        'alert_logs_period' => [
+                            'env' => 'APP_ALERT_LOGS_PERIOD',
+                        ],
+                    ],
+                ];
 
-            // default:
-            //     $template_vars = \Event::fire('filter.settings_template_vars', [$template_vars]);
-            //     break;
+                // todo: monitor App Logs
+                foreach ($params['template_vars']['logs'] as $i => $log) {
+                    if ($log == \App\ActivityLog::NAME_APP_LOGS || $log == \App\ActivityLog::NAME_OUT_EMAILS) {
+                        unset($params['template_vars']['logs'][$i]);
+                    }
+                }
+
+                break;
+            default:
+                $params = \Eventy::filter('settings.section_params', $params, $section);
+                break;
         }
 
-        return $template_vars;
+        if ($param) {
+            if (isset($params[$param])) {
+                return $params[$param];
+            } else {
+                return;
+            }
+        } else {
+            return $params;
+        }
     }
 
     public function getSectionSettings($section)
@@ -98,6 +162,8 @@ class SettingsController extends Controller
                     'open_tracking'        => Option::get('open_tracking'),
                     'enrich_customer_data' => Option::get('enrich_customer_data'),
                     'time_format'          => Option::get('time_format', User::TIME_FORMAT_24),
+                    'locale'               => \Helper::getRealAppLocale(),
+                    'timezone'             => config('app.timezone'),
                 ];
                 break;
             case 'emails':
@@ -112,15 +178,21 @@ class SettingsController extends Controller
                 ];
                 break;
             case 'alerts':
-                $settings = [
-                    'alert_recipients'   => Option::get('alert_recipients'),
-                    'alert_fetch'        => Option::get('alert_fetch'),
-                    'alert_fetch_period' => Option::get('alert_fetch_period'),
-                    'alert_send'         => Option::get('alert_send'),
-                ];
+                $settings = Option::getOptions([
+                    'alert_recipients',
+                    'alert_fetch',
+                    'alert_fetch_period',
+                    'alert_logs',
+                    'alert_logs_names',
+                    'alert_logs_period',
+                ], [
+                    'alert_logs_names'  => [],
+                    'alert_logs'        => config('app.alert_logs'),
+                    'alert_logs_period' => config('app.alert_logs_period'),
+                ]);
                 break;
             default:
-                $settings = \Eventy::filter('settings.section_settings', $section, $settings);
+                $settings = \Eventy::filter('settings.section_settings', $settings, $section);
                 break;
         }
 
@@ -171,8 +243,19 @@ class SettingsController extends Controller
 
         $request = \Eventy::filter('settings.before_save', $request, $section, $settings);
 
+        $cc_required = false;
+        $settings_params = $this->getSectionParams($section, 'settings');
         foreach ($settings as $i => $option_name) {
-            // By some reason isset() does not work for empty elements
+            // Option has to be saved to .env file.
+            if (!empty($settings_params[$option_name]) && !empty($settings_params[$option_name]['env'])) {
+                $env_value = $request->settings[$option_name] ?? '';
+                \Helper::setEnvFileVar($settings_params[$option_name]['env'], $env_value);
+                config($option_name, $env_value);
+                $cc_required = true;
+                continue;
+            }
+
+            // By some reason isset() does not work for empty elements.
             if (array_key_exists($option_name, $request->settings)) {
                 $option_value = $request->settings[$option_name];
                 Option::set($option_name, $option_value);
@@ -181,10 +264,17 @@ class SettingsController extends Controller
                 // so we can not just remove bool settings.
                 if (\Option::getDefault($option_name, null) === true) {
                     Option::set($option_name, false);
+                } elseif (is_array(\Option::getDefault($option_name, -1))) {
+                    Option::set($option_name, []);
                 } else {
                     Option::remove($option_name);
                 }
             }
+        }
+
+        // Clear cache if some options have been saved to .env file.
+        if ($cc_required) {
+            \Helper::clearCache();
         }
 
         \Session::flash('flash_success_floating', __('Settings updated'));

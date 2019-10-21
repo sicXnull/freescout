@@ -66,7 +66,7 @@ class Conversation extends Model
      */
     public static $status_icons = [
         self::STATUS_ACTIVE  => 'flag',
-        self::STATUS_PENDING => 'hourglass',
+        self::STATUS_PENDING => 'ok',
         self::STATUS_CLOSED  => 'lock',
         self::STATUS_SPAM    => 'ban-circle',
         //self::STATUS_OPEN => 'folder-open',
@@ -81,7 +81,7 @@ class Conversation extends Model
     ];
 
     public static $status_colors = [
-        self::STATUS_ACTIVE  => '#71c171',
+        self::STATUS_ACTIVE  => '#6ac27b',
         self::STATUS_PENDING => '#8b98a6',
         self::STATUS_CLOSED  => '#6b6b6b',
         self::STATUS_SPAM    => '#de6864',
@@ -291,6 +291,22 @@ class Conversation extends Model
     }
 
     /**
+     * Get last reply by customer or support agent.
+     *
+     * @param bool $last [description]
+     *
+     * @return [type] [description]
+     */
+    public function getLastReply()
+    {
+        return $this->threads()
+            ->whereIn('type', [Thread::TYPE_CUSTOMER, Thread::TYPE_MESSAGE])
+            ->where('state', Thread::STATE_PUBLISHED)
+            ->orderBy('created_at', 'desc')
+            ->first();
+    }
+
+    /**
      * Set preview text.
      *
      * @param string $text
@@ -322,7 +338,7 @@ class Conversation extends Model
             $title = __('Created by :person<br/>:date', ['person' => ucfirst(__(
             self::$persons[$this->source_via])), 'date' => User::dateFormat($this->created_at, 'M j, Y H:i')]);
         } else {
-            $title = __('Last reply by :person<br/>:date', ['person' => ucfirst(__(self::$persons[$this->source_via])), 'date' => User::dateFormat($this->created_at, 'M j, Y H:i')]);
+            $title = __('Last reply by :person<br/>:date', ['person' => ucfirst(__(self::$persons[$this->last_reply_from])), 'date' => User::dateFormat($this->created_at, 'M j, Y H:i')]);
         }
 
         return $title;
@@ -820,20 +836,29 @@ class Conversation extends Model
 
     /**
      * Replace vars in signature.
+     * `data` contains extra info which can be used to build signature.
      */
-    public function getSignatureProcessed()
+    public function getSignatureProcessed($data = [])
     {
         if (!\App\Misc\Mail::hasVars($this->mailbox->signature)) {
             return $this->mailbox->signature;
         }
+
+        // `user` should contain a user who replies to the conversation.
+        $user = auth()->user();
+        if (!$user && !empty($data['thread'])) {
+            $user = $data['thread']->created_by_user;
+        }
+
         $data = [
             'mailbox'      => $this->mailbox,
             'conversation' => $this,
             'customer'     => $this->customer,
+            'user'         => $user,
         ];
 
         // Set variables
-        return \App\Misc\Mail::replaceMailVars($this->mailbox->signature, $data);
+        return \MailHelper::replaceMailVars($this->mailbox->signature, $data);
     }
 
     /**
@@ -1021,5 +1046,22 @@ class Conversation extends Model
         $this->threads->each(function ($thread, $i) {
             $thread->deleteThread();
         });
+    }
+
+    /**
+     * Get waiting since time for the conversation.
+     *
+     * @param [type] $folder [description]
+     *
+     * @return [type] [description]
+     */
+    public function getWaitingSince($folder)
+    {
+        $waiting_since_field = $folder->getWaitingSinceField();
+        if ($waiting_since_field) {
+            return \App\User::dateDiffForHumans($this->$waiting_since_field);
+        } else {
+            return '';
+        }
     }
 }

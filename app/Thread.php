@@ -610,4 +610,138 @@ class Thread extends Model
 
         return $name;
     }
+
+    /**
+     * Check if thread is a reply from customer or user.
+     *
+     * @return bool [description]
+     */
+    public function isReply()
+    {
+        return in_array($this->type, [\App\Thread::TYPE_MESSAGE, \App\Thread::TYPE_CUSTOMER]);
+    }
+
+    /**
+     * Is this thread created from auto responder email.
+     *
+     * @return bool [description]
+     */
+    public function isAutoResponder()
+    {
+        return \MailHelper::isAutoResponder($this->headers);
+    }
+
+    /**
+     * Is thread created from incoming bounce email.
+     *
+     * @return bool [description]
+     */
+    public function isBounce()
+    {
+        if (!empty($this->getSendStatusData()['is_bounce'])) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * Send status data mayb contain the following information:
+     * - bounce info (status_code, action, diagnostic_code, is_bounce, bounce_for_thread, bounce_for_conversation, bounced_by_thread, bounced_by_conversation)
+     * - send error message
+     * - click date
+     * - unsubscribe date
+     * - complain date.
+     *
+     * @return [type] [description]
+     */
+    public function getSendStatusData()
+    {
+        return \Helper::jsonToArray($this->send_status_data);
+    }
+
+    public function updateSendStatusData($new_data)
+    {
+        if ($new_data) {
+            $send_status_data = $this->getSendStatusData();
+            if ($send_status_data) {
+                $send_status_data = array_merge($send_status_data, $new_data);
+            } else {
+                $send_status_data = $new_data;
+            }
+            $this->send_status_data = json_encode($send_status_data);
+        } else {
+            $this->send_status_data = null;
+        }
+    }
+
+    public function isSendStatusError()
+    {
+        return in_array($this->send_status, \App\SendLog::$status_errors);
+    }
+
+    /**
+     * Create thread.
+     * 
+     * @param  [type] $conversation_id [description]
+     * @param  [type] $text            [description]
+     * @param  array  $data            [description]
+     * @return [type]                  [description]
+     */
+    public static function create($conversation, $type, $body, $data = [], $save = true)
+    {
+        $thread = new Thread();
+        $thread->conversation_id = $conversation->id;
+        $thread->type = $type;
+        $thread->body = $body;
+        $thread->status = $conversation->status;
+        $thread->state = Thread::STATE_PUBLISHED;
+
+        // Assigned to.
+        if (!empty($data['user_id'])) {
+            $thread->user_id = $data['user_id'];
+        }
+        if (!empty($data['message_id'])) {
+            $thread->message_id = $data['message_id'];
+        }
+        if (!empty($data['headers'])) {
+            $thread->headers = $data['headers'];
+        }
+        if (!empty($data['from'])) {
+            $thread->from = $data['from'];
+        }
+        if (!empty($data['to'])) {
+            $thread->setTo($data['to']);
+        }
+        if (!empty($data['cc'])) {
+            $thread->setCc($data['cc']);
+        }
+        if (!empty($data['bcc'])) {
+            $thread->setBcc($data['bcc']);
+        }
+        if (isset($data['first'])) {
+            $thread->from = $data['first'];
+        }
+        if (isset($data['source_via'])) {
+            $thread->source_via = $data['source_via'];
+        }
+        if (isset($data['source_type'])) {
+            $thread->source_type = $data['source_type'];
+        }
+        if (!empty($data['customer_id'])) {
+            $thread->customer_id = $data['customer_id'];
+        }
+        if (!empty($data['created_by_customer_id'])) {
+            $thread->created_by_customer_id = $data['created_by_customer_id'];
+        }
+        if (!empty($data['created_by_user_id'])) {
+            $thread->created_by_user_id = $data['created_by_user_id'];
+        }
+
+        if ($save) {
+            $thread->save();
+        }
+
+        return $thread;
+    }
 }

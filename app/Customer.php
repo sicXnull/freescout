@@ -456,7 +456,7 @@ class Customer extends Model
      */
     public function getMainEmail()
     {
-        return $this->emails()->first()->email;
+        return optional($this->emails()->first())->email;
     }
 
     /**
@@ -663,7 +663,7 @@ class Customer extends Model
     {
         $email = Email::sanitizeEmail($email);
         if (!$email) {
-            return;
+            return null;
         }
         $email_obj = Email::where('email', $email)->first();
         if ($email_obj) {

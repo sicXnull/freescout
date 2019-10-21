@@ -23,7 +23,7 @@ var LangMessages = {
         "{{ $locale }}.messages": {
             {{-- Add here strings which you need to be translated in JS--}}
             "ajax_error": "{{ __("Error occured. Please check your internet connection and try again.") }}",
-            "error_occured": "{{ __("Error occured, please try again later.") }}",
+            "error_occured": "{{ __("Error occured. Please try again later.") }}",
             "upload_attachments": "{{ __("Upload Attachments") }}",
             "saved_replies": "{{ __("Saved Replies") }}",
             "save_draft": "{{ __("Save Draft") }}",
@@ -42,6 +42,7 @@ var LangMessages = {
             "first_name": "{{ __("First Name") }}",
             "last_name": "{{ __("Last Name") }}",
             "email_addr": "{{ __("Email Address") }}",
+            "user": "{{ __("User") }}",
             "confirm_change_customer": "{{ __("Change the customer to :customer_email?") }}",
             "invite_sent": "{{ __("Invite email has been sent") }}",
             "invite_resent": "{{ __("Invite email has been resent") }}",
@@ -57,12 +58,11 @@ var LangMessages = {
             "email_sent": "{{ __("Email passed for delivery. If you don't receive a test email, check your mail server logs.") }}",
             "connection_established": "{{ __("Connection established!") }}",
             "confirm_delete_conversation": "{{ __("Delete this conversation?") }}",
-            "confirm_delete_user": "{{ __("Deleting this User will deactivate workflows they are tied to and unassign their conversations. If you are sure, type :delete and click the red button.") }}",
-            "type_delete": "{{ __("Type :delete") }}",
             "drag_image_file": "{{ __("Drag image or file here") }}",
             "confirm_delete_module": "{{ __("Delete this module?") }}",
             "confirm_update": "{{ __("Please backup application files and database before you continue.") }}",
             "remove_format": "{{ __("Remove Formatting") }}",
+            "list": "{{ __("List") }}",
 
             "update": "{{ __("Update") }}"
         }@if (!$loop->last),@endif

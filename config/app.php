@@ -12,7 +12,7 @@ return [
     | or any other location as required by the application or its packages.
     */
 
-    'version' => '1.0.7',
+    'version' => '1.1.6',
 
     /*
     |--------------------------------------------------------------------------
@@ -91,8 +91,15 @@ return [
     | locales: available locales
     */
 
-    'locale'  => 'en',
-    'locales' => ['en'],
+    'locale'          => env('APP_LOCALE', 'en'),
+    'locales'         => ['en', 'fr', 'it'],
+    'default_locale'  => 'en',
+
+    /*
+    | app()->setLocale() in Localize middleware also changes config('app.locale'),
+    | so we are keeping real app locale in real_locale parameter.
+    */
+   'real_locale' => env('APP_LOCALE', 'en'),
 
     /*
     |--------------------------------------------------------------------------
@@ -170,9 +177,12 @@ return [
     /*
     |--------------------------------------------------------------------------
     | Parameters used to run queued jobs processing.
-    | Checks for new jobs every 5 seconds.
-    | Do not set more than 1 retry, as it may lead to sending repeated emails if one recipient fails
-    | and another succeeds.
+    | Checks for new jobs every --sleep seconds.
+    | If --tries is set and job fails it is being processed right away without any delay.
+    | --delay parameter does not work to set delays between retry attempts.
+    /
+    | Jobs sending emails are retried manually in handle().
+    | Number of retries is set in each job class.
     |-------------------------------------------------------------------------
     */
     'queue_work_params' => ['--queue' => 'emails,default', '--sleep' => '5', '--tries' => '1'],
@@ -191,6 +201,31 @@ return [
     |-------------------------------------------------------------------------
     */
     'force_https' => env('APP_FORCE_HTTPS', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Logs monitoring parameters.
+    | These settings must be stored to avoid DB query in Kenel.php
+    |-------------------------------------------------------------------------
+    */
+    'alert_logs'        => env('APP_ALERT_LOGS', false),
+    'alert_logs_period' => env('APP_ALERT_LOGS_PERIOD', ''),
+
+    /*
+    |--------------------------------------------------------------------------
+    | App colors.
+    |--------------------------------------------------------------------------
+    */
+    'colors' => [
+        'main_light'    => '#0078d7',
+        'main_dark'     => '#005a9e',
+        'note'          => '#ffc646',
+        'text_note'     => '#e6b216',
+        'text_customer' => '#8d959b',
+        'text_user'     => '#8d959b',
+        'bg_user_reply' => '#f4f8fd',
+        'bg_note'       => '#fffbf1',
+    ],
 
     /*
     |--------------------------------------------------------------------------

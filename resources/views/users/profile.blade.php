@@ -112,6 +112,18 @@
                         </div>
                     </div>
 
+                    <div class="form-group{{ $errors->has('locale') ? ' has-error' : '' }}">
+                        <label for="locale" class="col-sm-2 control-label">{{ __('Language') }}</label>
+
+                        <div class="col-sm-6">
+                            <select id="locale" class="form-control input-sized" name="locale">
+                                @include('partials/locale_options', ['selected' => old('locale', $user->getLocale())])
+                            </select>
+
+                            @include('partials/field_error', ['field'=>'locale'])
+                        </div>
+                    </div>
+
                     <div class="form-group{{ $errors->has('timezone') ? ' has-error' : '' }}">
                         <label for="timezone" class="col-sm-2 control-label">{{ __('Timezone') }}</label>
 
@@ -178,7 +190,7 @@
                             @if (Auth::user()->isAdmin())
                                 @if ($user->invite_state == App\User::INVITE_STATE_ACTIVATED)
                                     @if ($user->id != Auth::user()->id)
-                                        <a href="#" class="btn btn-link reset-password-trigger" data-loading-text="{{ __('Resettings password') }}…">{{ __('Reset password') }}</a>
+                                        <a href="#" class="btn btn-link reset-password-trigger" data-loading-text="{{ __('Resetting password') }}…">{{ __('Reset password') }}</a>
                                     @endif
                                 @elseif ($user->invite_state == App\User::INVITE_STATE_SENT)
                                     <a href="#" class="btn btn-link resend-invite-trigger" data-loading-text="{{ __('Resending') }}…">{{ __('Re-send invite email') }}</a>
@@ -194,6 +206,43 @@
                     </div>
                 </form>
             </div>
+        </div>
+    </div>
+
+    <div id="delete_user_modal" class="hidden">
+        <div>
+        <div class="text-center">
+            <div class="col-sm-10 col-sm-offset-1 text-large margin-top-10 margin-bottom">{!! __("Deleting this User will deactivate workflows they are tied to and assign their conversations to:") !!}</div>
+            <form class="assign_form form-horizontal">
+                @foreach (App\Mailbox::all() as $mailbox)
+                    <div class="col-sm-9 col-sm-offset-1">
+                        <div class="form-group">
+                            <label class="col-sm-5 control-label">{{ $mailbox->name }}</label>
+                            <div class="col-sm-7">
+                                <select name="assign_user[{{ $mailbox->id }}]" class="form-control input-sized">
+                                    <option value="-1">{{ __("Anyone") }}</option>
+                                    @foreach ($mailbox->usersHavingAccess() as $assign_user)
+                                        @if ($assign_user->id != $user->id)
+                                            <option value="{{ $assign_user->id }}">{{ $assign_user->getFullName() }}</option>
+                                        @endif
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
+            </form>
+            <div class="col-sm-12 text-large margin-top">{!! __("If you are sure, type :delete and click the red button.", ['delete' => '<span class="text-danger">DELETE</span>']) !!}</div>
+            <div class="col-sm-6 col-sm-offset-3 margin-top-10 margin-bottom">
+                <div class="input-group">
+                    <input type="text" class="form-control input-delete-user" placeholder="{!! __("Type :delete", ['delete' => '&quot;DELETE&quot;']) !!}">
+                    <span class="input-group-btn">
+                        <button class="btn btn-danger button-delete-user" disabled="disabled"><i class="glyphicon glyphicon-ok"></i></button>
+                    </span>
+                </div>
+            </div>
+            <div class="clearfix"></div>
+        </div>
         </div>
     </div>
 @endsection

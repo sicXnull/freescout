@@ -248,6 +248,10 @@ class Mailbox extends Model
                     ->orWhere(function ($query2) {
                         $query2->where(['type' => Folder::TYPE_MINE]);
                         $query2->where(['user_id' => auth()->user()->id]);
+                    })
+                    ->orWhere(function ($query3) {
+                        $query3->where(['type' => Folder::TYPE_STARRED]);
+                        $query3->where(['user_id' => auth()->user()->id]);
                     });
             })
             ->orderBy('type')
@@ -330,12 +334,20 @@ class Mailbox extends Model
     /**
      * Get users who have access to the mailbox.
      */
-    public function usersHavingAccess($cache = false)
+    public function usersHavingAccess($cache = false, $fields = 'users.*')
     {
-        $users = $this->users;
-        $admins = User::where('role', User::ROLE_ADMIN)->remember(\App\Misc\Helper::cacheTime($cache))->get();
+        $admins = User::where('role', User::ROLE_ADMIN)->select($fields)->remember(\App\Misc\Helper::cacheTime($cache))->get();
 
-        return $users->merge($admins)->unique();
+        $users = $this->users()->select($fields)->get()->merge($admins)->unique();
+
+        // Exclude deleted users (better to do it in PHP).
+        foreach ($users as $i => $user) {
+            if ($user->isDeleted()) {
+                $users->forget($i);
+            }
+        }
+
+        return $users;
     }
 
     /**
@@ -343,10 +355,12 @@ class Mailbox extends Model
      */
     public function userIdsHavingAccess()
     {
-        $user_ids = $this->users()->pluck('users.id');
+        return $this->usersHavingAccess(false, ['users.id', 'users.status'])->pluck('id')->toArray();
+
+        /*$user_ids = $this->users()->pluck('users.id');
         $admin_ids = User::where('role', User::ROLE_ADMIN)->pluck('id');
 
-        return $user_ids->merge($admin_ids)->unique()->toArray();
+        return $user_ids->merge($admin_ids)->unique()->toArray();*/
     }
 
     /**
@@ -506,5 +520,49 @@ class Mailbox extends Model
         }
 
         return $list;
+    }
+
+    /**
+     * Get all active mailboxes.
+     *
+     * @return [type] [description]
+     */
+    public static function getActiveMailboxes()
+    {
+        $active = [];
+
+        // It is more effective to retrive all mailboxes and filter them in PHP.
+        $mailboxes = self::all();
+        foreach ($mailboxes as $mailbox) {
+            if ($mailbox->isActive()) {
+                $active[] = $mailbox;
+            }
+        }
+
+        return $active;
+    }
+
+    /**
+     * Get mailbox URL.
+     *
+     * @return [type] [description]
+     */
+    public function url()
+    {
+        return route('mailboxes.view', ['id' => $this->id]);
+    }
+
+    /**
+     * Fill the model with an array of attributes.
+     *
+     * @param array $attributes [description]
+     *
+     * @return [type] [description]
+     */
+    public function fill(array $attributes)
+    {
+        $this->fillable(array_merge($this->getFillable(), \Eventy::filter('mailbox.fillable_fields', [])));
+
+        return parent::fill($attributes);
     }
 }

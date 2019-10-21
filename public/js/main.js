@@ -2,6 +2,7 @@ var fs_sidebar_menu_applied = false;
 var fs_loader_timeout;
 var fs_processing_send_reply = false;
 var fs_processing_save_draft = false;
+var fs_send_reply_after_draft = false;
 var fs_connection_errors = 0;
 var fs_editor_change_timeout = -1;
 // For how long to remember conversation note drafts
@@ -10,7 +11,7 @@ var fs_draft_autosave_period = 12; // seconds
 var fs_reply_changed = false;
 var fs_conv_editor_buttons = {};
 var fs_conv_editor_toolbar = [
-    ['style', ['attachment', 'bold', 'italic', /*'underline',*/ 'removeformat', 'ul', 'ol', 'link', 'picture', 'codeview']],
+    ['style', ['attachment', 'bold', 'italic', 'underline', 'lists', 'removeformat', 'link', 'picture', 'codeview']],
     ['actions', ['savedraft', 'discard']],
 ];
 
@@ -134,6 +135,11 @@ var EditorInsertVarButton = function (context) {
 		        '<option value="{%customer.lastName%}">'+Lang.get("messages.last_name")+'</option>'+
 		        '<option value="{%customer.email%}">'+Lang.get("messages.email_addr")+'</option>'+
 		    '</optgroup>'+
+		    '<optgroup label="'+Lang.get("messages.user")+'">'+
+		        '<option value="{%user.fullName%}">'+Lang.get("messages.full_name")+'</option>'+
+		        '<option value="{%user.firstName%}">'+Lang.get("messages.first_name")+'</option>'+
+		        '<option value="{%user.lastName%}">'+Lang.get("messages.last_name")+'</option>'+
+		    '</optgroup>'+
 	    '</select>';
 
 	// create button
@@ -158,6 +164,36 @@ var EditorRemoveFormatButton = function (context) {
 			context.invoke('removeFormat');
 		}
 	});
+
+	return button.render();   // return button as jquery object
+}
+
+var EditorListsButton = function (context) {
+	var ui = $.summernote.ui;
+
+	// create button
+	var button = ui.buttonGroup([
+        ui.button({
+            className: 'dropdown-toggle',
+            contents: ui.dropdownButtonContents(ui.icon('note-icon-unorderedlist'), {icons:{'caret': 'note-icon-caret1'}}),
+            tooltip: Lang.get("messages.list"),
+            data: {
+                toggle: 'dropdown'
+            }
+        }),
+        ui.dropdown([
+            ui.button({
+                contents: ui.icon($.summernote.options.icons.unorderedlist),
+                tooltip: $.summernote.lang[$.summernote.options.lang].lists.unordered /*+ $.summernote.representShortcut('insertUnorderedList')*/,
+                click: context.createInvokeHandler('editor.insertUnorderedList')
+            }),
+            ui.button({
+                contents: ui.icon($.summernote.options.icons.orderedlist),
+                tooltip: $.summernote.lang[$.summernote.options.lang].lists.ordered /*+ $.summernote.representShortcut('insertUnorderedList')*/,
+                click: context.createInvokeHandler('editor.insertOrderedList')
+            })
+        ])
+    ]);
 
 	return button.render();   // return button as jquery object
 }
@@ -204,6 +240,12 @@ function triggersInit()
 {
 	// Tooltips
     $('[data-toggle="tooltip"]').tooltip({container: 'body'});
+    var handler = function() {
+	  return $('body [data-toggle="tooltip"]').tooltip('hide');
+	};
+	$(document).on('mouseenter', '.dropdown-menu', handler);
+	$(document).on('hidden.bs.dropdown', handler);
+	$(document).on('shown.bs.dropdown', handler);
 
     // Popover
     $('[data-toggle="popover"]').popover({
@@ -585,7 +627,7 @@ function showFloatingAlert(type, msg)
     fsFloatingAlertsInit();
 }
 
-function conversationInit()
+function initConversation()
 {
 	$(document).ready(function(){
 
@@ -818,7 +860,14 @@ function conversationInit()
 		starConversationInit();
 		maybeShowStoredNote();
 		maybeShowDraft();
+		processLinks();
 	});
+}
+
+// Add target blank to all links in threads.
+function processLinks()
+{
+	$('.thread-body a').attr('target', '_blank');
 }
 
 // Get current conversation assignee
@@ -870,7 +919,8 @@ function convEditorInit()
 	    attachment: EditorAttachmentButton,
 	    savedraft: EditorSaveDraftButton,
 	    discard: EditorDiscardButton,
-	    removeformat: EditorRemoveFormatButton
+	    removeformat: EditorRemoveFormatButton,
+	    lists: EditorListsButton
 	});
 
 	$('#body').summernote({
@@ -1156,6 +1206,12 @@ function newConversationInit()
 	    	}
 
 	    	button.button('loading');
+
+	    	// If draft is being sent, we need to wait and send reply after draft has been saved.
+	    	if (fs_processing_save_draft) {
+	    		fs_send_reply_after_draft = true;
+	    		return;
+	    	}
 
 	    	data = form.serialize();
 	    	data += '&action=send_reply';
@@ -1767,20 +1823,7 @@ function userProfileInit()
 
 	// Delete user
     jQuery("#delete-user-trigger").click(function(e){
-    	var confirm_html = '<div>'+
-		'<div class="text-center">'+
-			'<div class="text-large margin-top-10">'+Lang.get("messages.confirm_delete_user", {delete: '<span class="text-danger">DELETE</span>'})+'</div>'+
-			'<div class="col-sm-6 col-sm-offset-3 margin-top margin-bottom">'+
-				'<div class="input-group">'+
-				    '<input type="text" class="form-control input-delete-user" placeholder="'+Lang.get("messages.type_delete", {delete: '&quot;DELETE&quot;'})+'">'+
-				    '<span class="input-group-btn">'+
-				    	'<button class="btn btn-danger button-delete-user" disabled="disabled"><i class="glyphicon glyphicon-ok"></i></button>'+
-				    '</span>'+
-				'</div>'+
-			'</div>'+
-			'<div class="clearfix"></div>'+
-		'</div>'+
-		'</div>';
+    	var confirm_html = $('#delete_user_modal').html();
 
 		showModalDialog(confirm_html, {
 			width_auto: false,
@@ -1794,12 +1837,18 @@ function userProfileInit()
 				});
 
 				modal.children().find('.button-delete-user:first').click(function(e) {
+
+					var data = $('.assign_form:visible:first').serialize();
+					if (data) {
+						data += '&';
+					}
+					data += 'action=delete_user';
+					data += '&user_id='+getGlobalAttr('user_id');
+
 					modal.modal('hide');
+
 					fsAjax(
-						{
-							action: 'delete_user',
-							user_id: getGlobalAttr('user_id')
-						}, 
+						data, 
 						laroute.route('users.ajax'),
 						function(response) {
 							if (typeof(response.status) != "undefined" && response.status == "success") {
@@ -2152,7 +2201,7 @@ function saveDraft(reload_page, no_loader)
 	// Do not autosave draft if reply form has been closed
 	var form = $(".form-reply:visible:first");
 	if (!form || !form.length) {
-		fs_processing_save_draft = false;
+		finishSaveDraft();
 		return;
 	}
 
@@ -2173,6 +2222,11 @@ function saveDraft(reload_page, no_loader)
 	if ((new_conversation || !reload_page) && !fs_reply_changed) {
 		fs_processing_save_draft = false;
 		return;
+	}
+
+	// Make button green when user clicks on it.
+	if (reload_page) {
+		button.addClass('text-success');
 	}
 
 	data = form.serialize();
@@ -2216,14 +2270,25 @@ function saveDraft(reload_page, no_loader)
 			showAjaxError(response);
 		}
 		loaderHide();
-		fs_processing_save_draft = false;
+		finishSaveDraft();
 	}, 
 	no_loader,
 	function() {
 		showFloatingAlert('error', Lang.get("messages.ajax_error"));
 		loaderHide();
-		fs_processing_save_draft = false;
+		finishSaveDraft();
 	});
+}
+
+// If draft is being sent and user clicks Send reply, 
+// we need to wait and send reply after draft has been saved.
+function finishSaveDraft()
+{
+	fs_processing_save_draft = false;
+	if (fs_send_reply_after_draft) {
+		fs_processing_send_reply = false;
+		$(".btn-reply-submit:first").button('reset').click();
+	}
 }
 
 function setUrl(url)
@@ -2382,6 +2447,37 @@ function starConversationInit()
 	});
 }
 
+function conversationsTableInit()
+{
+	converstationBulkActionsInit();
+
+	$(function() {
+		$('.toggle-all:checkbox').on('click', function () {
+			$('.conv-checkbox:checkbox').prop('checked', this.checked).trigger('change');
+		});
+	});
+
+	
+
+	if ("ontouchstart" in window)
+	{
+		$(document).ready(function() {
+			$('.conv-row').on('contextmenu', function(event) {
+				event.preventDefault();
+				event.stopPropagation();
+			});
+
+			$('.conv-row').on('taphold', {duration: 700}, function(event) {
+				var row = $(event.target).parents('.conv-row');
+				var checkbox = $(row).find('input.conv-checkbox');
+				$(checkbox).prop('checked', !checkbox.prop('checked'));
+				$(checkbox).trigger('change');
+				$(row).toggleClass('selected');
+			});
+		});
+	}
+}
+
 function converstationBulkActionsInit()
 {
 	$(document).ready(function() {
@@ -2400,11 +2496,13 @@ function converstationBulkActionsInit()
 			return conv_ids;
 		}
 
+		$(bulk_buttons).show();
 		$(bulk_buttons).affix({
 			offset: {
 				top: $(bulk_buttons).offset().top,
 			}
 		});
+		$(bulk_buttons).hide();
 
 		//fix for bootstrap bug: https://stackoverflow.com/questions/19711202/bootstrap-3-affix-plugin-click-bug/31892323
 		$(bulk_buttons).on( 'affix.bs.affix', function() {
@@ -2472,11 +2570,10 @@ function converstationBulkActionsInit()
 			);
 		});
 
-		// Change conversation status
+		// Delete conversation
 		$(".conv-delete", bulk_buttons).click(function(e) {
-			var confirm_html = $('#conversations-bulk-actions-delete-modal').html();
 
-			showModalDialog(confirm_html, {
+			showModalDialog('#conversations-bulk-actions-delete-modal', {
 				on_show: function(modal) {
 					modal.children().find('.delete-conversation-ok:first').click(function(e) {
 						modal.modal('hide');
@@ -2502,11 +2599,20 @@ function converstationBulkActionsInit()
 				}
 			});
 		});
+
+		$('.conv-checkbox-clear', bulk_buttons).click(function(e) {
+			$(checkboxes).trigger('change');
+			$(checkboxes).prop('checked', false);
+			$(checkboxes).trigger('change');
+			$('table.table-conversations tr').removeClass('selected');
+		});
+
 	});
 }
 
 function switchToNote()
 {
+	$(".conv-reply-block").addClass('hidden');
 	$('.conv-add-note:first').click();
 }
 

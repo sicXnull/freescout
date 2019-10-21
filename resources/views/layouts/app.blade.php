@@ -21,10 +21,10 @@
     {{-- Styles --}}
     {{-- Conversation page must open immediately, so we are loading scripts present on conversation page --}}
     {{-- style.css must be the last to able to redefine styles --}}
-    {!! Minify::stylesheet(\Eventy::filter('stylesheets', array('/css/fonts.css', '/css/bootstrap.css', '/css/select2/select2.min.css', '/js/featherlight/featherlight.min.css', '/js/featherlight/featherlight.gallery.min.css', '/css/style.css'))) !!}
+    {!! Minify::stylesheet(\Eventy::filter('stylesheets', array('/css/fonts.css', '/css/bootstrap.css', '/css/select2/select2.min.css', '/js/featherlight/featherlight.min.css', '/js/featherlight/featherlight.gallery.min.css', '/css/magic-check.css', '/css/style.css'))) !!}
     @yield('stylesheets')
 </head>
-<body class="@if (Auth::user() && Auth::user()->isAdmin()) user-is-admin @endif @yield('body_class')" @yield('body_attrs') @if (Auth::user()) data-auth_user_id="{{ Auth::user()->id }}" @endif>
+<body class="@if (!Auth::user()) user-is-guest @endif @if (Auth::user() && Auth::user()->isAdmin()) user-is-admin @endif @yield('body_class')" @yield('body_attrs') @if (Auth::user()) data-auth_user_id="{{ Auth::user()->id }}" @endif>
     <div id="app">
 
         @if (Auth::user())
@@ -93,31 +93,33 @@
                                     </ul>
                                 </li>
                             @endif--}}
-                            <li class="dropdown {{ \App\Misc\Helper::menuSelectedHtml('manage') }}">
-                                <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" v-pre>
-                                    {{ __('Manage') }} <span class="caret"></span>
-                                </a>
+                            @if (Auth::user()->isAdmin() || Auth::user()->can('viewMailboxMenu', Auth::user()))
+                                <li class="dropdown {{ \App\Misc\Helper::menuSelectedHtml('manage') }}">
+                                    <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" v-pre>
+                                        {{ __('Manage') }} <span class="caret"></span>
+                                    </a>
 
-                                <ul class="dropdown-menu">
-                                    @if (Auth::user()->isAdmin())
-                                        {{--<li><a href="#">{{ __('Apps') }} (todo)</a></li>--}}
-                                        <li class="{{ \App\Misc\Helper::menuSelectedHtml('settings') }}"><a href="{{ route('settings') }}">{{ __('Settings') }}</a></li>
-                                        {{--<li><a href="#">{{ __('Docs') }} (todo)</a></li>--}}
-                                    @endif
-                                    @if (Auth::user()->can('viewMailboxMenu', Auth::user()))
-                                        <li class="{{ \App\Misc\Helper::menuSelectedHtml('mailboxes') }}"><a href="{{ route('mailboxes') }}">{{ __('Mailboxes') }}</a></li>
-                                    @endif
-                                    {{--<li class="{{ \App\Misc\Helper::menuSelectedHtml('tags') }}"><a href="#">{{ __('Tags') }} (todo)</a></li>--}}
-                                    @if (Auth::user()->isAdmin())
-                                        {{--<li><a href="#">{{ __('Teams') }} (todo)</a></li>--}}
-                                        <li class="{{ \App\Misc\Helper::menuSelectedHtml('users') }}"><a href="{{ route('users') }}">{{ __('Users') }}</a></li>
-                                        <li class="{{ \App\Misc\Helper::menuSelectedHtml('modules') }}"><a href="{{ route('modules') }}">{{ __('Modules') }}</a></li>
-                                        <li class=""><a href="/translations">{{ __('Translate') }}</a></li>
-                                        <li class="{{ \App\Misc\Helper::menuSelectedHtml('logs') }}"><a href="{{ route('logs') }}">{{ __('Logs') }}</a></li>
-                                        <li class="{{ \App\Misc\Helper::menuSelectedHtml('system') }}"><a href="{{ route('system') }}">{{ __('System') }}</a></li>
-                                    @endif
-                                </ul>
-                            </li>
+                                    <ul class="dropdown-menu">
+                                        @if (Auth::user()->isAdmin())
+                                            {{--<li><a href="#">{{ __('Apps') }} (todo)</a></li>--}}
+                                            <li class="{{ \App\Misc\Helper::menuSelectedHtml('settings') }}"><a href="{{ route('settings') }}">{{ __('Settings') }}</a></li>
+                                            {{--<li><a href="#">{{ __('Docs') }} (todo)</a></li>--}}
+                                        @endif
+                                        @if (Auth::user()->can('viewMailboxMenu', Auth::user()))
+                                            <li class="{{ \App\Misc\Helper::menuSelectedHtml('mailboxes') }}"><a href="{{ route('mailboxes') }}">{{ __('Mailboxes') }}</a></li>
+                                        @endif
+                                        {{--<li class="{{ \App\Misc\Helper::menuSelectedHtml('tags') }}"><a href="#">{{ __('Tags') }} (todo)</a></li>--}}
+                                        @if (Auth::user()->isAdmin())
+                                            {{--<li><a href="#">{{ __('Teams') }} (todo)</a></li>--}}
+                                            <li class="{{ \App\Misc\Helper::menuSelectedHtml('users') }}"><a href="{{ route('users') }}">{{ __('Users') }}</a></li>
+                                            <li class="{{ \App\Misc\Helper::menuSelectedHtml('modules') }}"><a href="{{ route('modules') }}">{{ __('Modules') }}</a></li>
+                                            <li class=""><a href="/translations">{{ __('Translate') }}</a></li>
+                                            <li class="{{ \App\Misc\Helper::menuSelectedHtml('logs') }}"><a href="{{ route('logs') }}">{{ __('Logs') }}</a></li>
+                                            <li class="{{ \App\Misc\Helper::menuSelectedHtml('system') }}"><a href="{{ route('system') }}">{{ __('System') }}</a></li>
+                                        @endif
+                                    </ul>
+                                </li>
+                            @endif
                         </ul>
 
                         <!-- Right Side Of Navbar -->
@@ -258,7 +260,7 @@
     @yield('body_bottom')
 
     {{-- Scripts --}}
-    {!! Minify::javascript(\Eventy::filter('javascripts', array('/js/jquery.js', '/js/bootstrap.js', '/js/laroute.js', '/js/lang.js', '/js/vars.js', '/js/parsley/parsley.min.js', '/js/parsley/i18n/'.Config::get('app.locale').'.js', '/js/select2/select2.full.min.js', '/js/polycast/polycast.js', '/js/push/push.min.js', '/js/featherlight/featherlight.min.js', '/js/featherlight/featherlight.gallery.min.js', '/js/main.js'))) !!}
+    {!! Minify::javascript(\Eventy::filter('javascripts', array('/js/jquery.js', '/js/bootstrap.js', '/js/laroute.js', '/js/lang.js', '/js/vars.js', '/js/parsley/parsley.min.js', '/js/parsley/i18n/'.Config::get('app.locale').'.js', '/js/select2/select2.full.min.js', '/js/polycast/polycast.js', '/js/push/push.min.js', '/js/featherlight/featherlight.min.js', '/js/featherlight/featherlight.gallery.min.js', '/js/taphold.js', '/js/main.js'))) !!}
     @yield('javascripts')
     @if ($__env->yieldContent('javascript'))
         <script type="text/javascript">

@@ -25,8 +25,8 @@
                     @if ($new_version_available)
                         <strong class="text-danger">{{ \Config::get('app.version') }}</strong>
                         <div class="alert alert-danger margin-top-10">
-                            {!! __('A new version [:new_version] is available.', ['new_version' => '<a href="'.config('app.freescout_repo').'/releases" target="_blank"><strong>'.$latest_version.'</strong></a>']) !!}
-                            <button class="btn btn-default btn-sm update-trigger" data-loading-text="{{ __('Updating') }}…{{ __('This may take several minutes') }}"><small class="glyphicon glyphicon-refresh"></small> {{ __('Update Now') }}</button>
+                            {{ __('A new version is available') }}: <strong>{{ $latest_version }}</strong> <a href="{{ config('app.freescout_repo') }}/releases" target="_blank">({{ __('View details') }})</a>
+                            <button class="btn btn-default btn-sm update-trigger margin-left-10" data-loading-text="{{ __('Updating') }}…{{ __('This may take several minutes') }}"><small class="glyphicon glyphicon-refresh"></small> {{ __('Update Now') }}</button>
                         </div>
                     @else
                         <strong class="text-success">{{ \Config::get('app.version') }}</strong> 
@@ -97,7 +97,7 @@
                         @if ($perm['status'])
                             <strong class="text-success">OK</strong>
                         @else
-                            <strong class="text-danger">{{ __('Not writable') }} ({{ $perm['value'] }})</strong>
+                            <strong class="text-danger">{{ __('Not writable') }} @if ($perm['value'])({{ $perm['value'] }})@endif</strong>
                         @endif
                     </td>
                 </tr>
@@ -105,23 +105,31 @@
         </tbody>
     </table>
 
-    {{ __('Symlinks') }}
     <table class="table table-dark-header table-bordered table-responsive table-narrow">
         <tbody>
             <tr>
-                <th>public/storage</th>
+                <th>public/storage (symlink)</th>
                 <td class="table-main-col">
                     @if ($public_symlink_exists)
                         <strong class="text-success">OK</strong>
                     @else
                         <strong class="text-danger">{{ __('Not found') }}</strong>
-                        <div class="alert alert-danger">{{ __('Create symlink manually') }}: <code>ln -s storage/app/public public/storage</code></div>
+                        <div class="alert alert-danger margin-top-10">{{ __('Create symlink manually') }}: <code>ln -s storage/app/public public/storage</code></div>
+                    @endif
+                </td>
+            </tr>
+            <tr>
+                <th>.env</th>
+                <td class="table-main-col">
+                    @if ($env_is_writable)
+                        <strong class="text-success">OK</strong>
+                    @else
+                        <strong class="text-danger">{{ __('Not writable') }}</strong>
                     @endif
                 </td>
             </tr>
         </tbody>
     </table>
-
 
     <h3 id="cron" class="margin-top-40">Cron Commands</h3>
     <p>
@@ -153,31 +161,33 @@
                     <p>
                         {{ __('Total') }}: <strong>{{ count($queued_jobs)}}</strong>
                     </p>
-                    @foreach ($queued_jobs as $job)
-                        <table class="table">
-                            <tbody>
-                                <tr>
-                                    <th colspan="2">{{ $loop->index+1 }}. {{ json_decode($job->payload, true)['displayName'] }}</th>
-                                </tr>
-                                <tr>
-                                    <td>{{ __('Queue') }}</td>
-                                    <td>{{ $job->queue }}</td>
-                                </tr>
-                                <tr>
-                                    <td>{{ __('Attempts') }}</td>
-                                    <td>
-                                        @if ($job->attempts > 0)<strong class="text-danger">@endif
-                                            {{ $job->attempts }}
-                                        @if ($job->attempts > 0)</strong>@endif
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>{{ __('Created At') }}</td>
-                                    <td>{{  App\User::dateFormat($job->created_at) }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    @endforeach
+                    <div class="jobs-list">
+                        @foreach ($queued_jobs as $job)
+                            <table class="table">
+                                <tbody>
+                                    <tr>
+                                        <th colspan="2">{{ $loop->index+1 }}. {{ json_decode($job->payload, true)['displayName'] }}</th>
+                                    </tr>
+                                    <tr>
+                                        <td>{{ __('Queue') }}</td>
+                                        <td>{{ $job->queue }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>{{ __('Attempts') }}</td>
+                                        <td>
+                                            @if ($job->attempts > 0)<strong class="text-danger">@endif
+                                                {{ $job->attempts }}
+                                            @if ($job->attempts > 0)</strong>@endif
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>{{ __('Created At') }}</td>
+                                        <td>{{  App\User::dateFormat($job->created_at) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        @endforeach
+                    </div>
                 </td>
             </tr>
             <tr>
@@ -185,24 +195,42 @@
                 <td>
                     <p>
                         {{ __('Total') }}:  <strong @if (count($failed_jobs) > 0) class="text-danger" @endif >{{ count($failed_jobs) }}</strong>
+
+                        @if (count($failed_jobs))
+                            &nbsp;&nbsp;
+                            <form action="{{ route('system.action') }}" method="POST">
+                                {{ csrf_field() }}
+
+                                <select name="failed_queue" class="">
+                                    @foreach ($failed_queues as $queue)
+                                        <option value="{{ $queue }}">{{ $queue }}</option>
+                                    @endforeach
+                                </select>
+
+                                <button type="submit" name="action" value="delete_failed_jobs" class="btn btn-default btn-xs margin-left-10">{{ __('Delete') }}</button>
+                                <button type="submit" name="action" value="retry_failed_jobs" class="btn btn-default btn-xs">{{ __('Retry') }}</button>
+                            </form>
+                        @endif
                     </p>
-                    @foreach ($failed_jobs as $job)
-                        <table class="table">
-                            <tbody>
-                                <tr>
-                                    <th colspan="2">{{ $loop->index+1 }}. {{ json_decode($job->payload, true)['displayName'] }}</th>
-                                </tr>
-                                <tr>
-                                    <td>{{ __('Queue') }}</td>
-                                    <td>{{ $job->queue }}</td>
-                                </tr>
-                                <tr>
-                                    <td>{{ __('Failed At') }}</td>
-                                    <td>{{  App\User::dateFormat($job->failed_at) }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    @endforeach
+                    <div class="jobs-list">
+                        @foreach ($failed_jobs as $job)
+                            <table class="table">
+                                <tbody>
+                                    <tr>
+                                        <th colspan="2">{{ $loop->index+1 }}. {{ json_decode($job->payload, true)['displayName'] }}</th>
+                                    </tr>
+                                    <tr>
+                                        <td>{{ __('Queue') }}</td>
+                                        <td>{{ $job->queue }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>{{ __('Failed At') }}</td>
+                                        <td>{{  App\User::dateFormat($job->failed_at, 'M j, Y H:i:s') }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        @endforeach
+                    </div>
                 </td>
             </tr>
         </tbody>
