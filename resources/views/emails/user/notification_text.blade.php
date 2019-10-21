@@ -7,12 +7,14 @@
 @foreach ($threads as $thread)
 -----------------------------------------------------------
 @if ($thread->type == App\Thread::TYPE_LINEITEM)
-## @include('emails/user/thread_by') @if ($thread->action_type == App\Thread::ACTION_TYPE_STATUS_CHANGED) {{ __("marked as") }} {{ $thread->getStatusName() }} @elseif ($thread->action_type == App\Thread::ACTION_TYPE_USER_CHANGED){{ __("assigned to") }} {{ $thread->getAssigneeName(false, $user) }}@endif, {{ __('on :date', ['date' => App\Customer::dateFormat($thread->created_at, 'M j @ H:i').' ('.\Config::get('app.timezone').')' ]) }}
+## @include('emails/user/thread_by') {!! $thread->getActionText('', true, false, $user) !!}, {{ __('on :date', ['date' => App\Customer::dateFormat($thread->created_at, 'M j @ H:i').' ('.\Config::get('app.timezone').')' ]) }}
 @else
 @if ($thread->type == App\Thread::TYPE_NOTE)
-## {{ $thread->getCreatedBy()->getFullName(true) }} {{ __('added a note') }}, {{ __('on :date', ['date' => App\Customer::dateFormat($thread->created_at, 'M j @ H:i').' ('.\Config::get('app.timezone').')' ]) }}@else
-## {{ $thread->getCreatedBy()->getFullName(true) }} @if ($loop->last){{ __('started the conversation') }}@else {{ __('replied') }}@endif, {{ __('on :date', ['date' => App\Customer::dateFormat($thread->created_at, 'M j @ H:i').' ('.\Config::get('app.timezone').')' ]) }}@endif:
-{{ (new Html2Text\Html2Text($thread->body))->getText() }}@endif
+## {!! __(':person added a note', ['person' => $thread->getCreatedBy()->getFullName(true)]) !!}, {{ __('on :date', ['date' => App\Customer::dateFormat($thread->created_at, 'M j @ H:i').' ('.\Config::get('app.timezone').')' ]) }}@else
+## @if ($thread->isForwarded()){{ __(':person forwarded a conversation #:forward_parent_conversation_number', ['person' => $thread->getCreatedBy()->getFullName(true), 'forward_parent_conversation_number' => $thread->getMeta('forward_parent_conversation_number')]) }}@elseif ($loop->last){{ __(':person started the conversation', ['person' => $thread->getCreatedBy()->getFullName(true)]) }}@else{{ __(':person replied', ['person' => $thread->getCreatedBy()->getFullName(true)]) }}@endif, {{ __('on :date', ['date' => App\Customer::dateFormat($thread->created_at, 'M j @ H:i').' ('.\Config::get('app.timezone').')' ]) }}@endif:
+@if ($thread->isForward()){!! __(':person forwarded this conversation. Forwarded conversation: :forward_child_conversation_number', ['person' => ucfirst($thread->getForwardByFullName()),'forward_child_conversation_number' => '#'.$thread->getMeta('forward_child_conversation_number')]) !!}
+@endif{{ (new Html2Text\Html2Text($thread->body))->getText() }}
+@endif
 @if ($thread->has_attachments)
 {{ __('Attached:') }}
 @foreach ($thread->attachments as $i => $attachment)
@@ -21,12 +23,9 @@
 @endif
 @endforeach
 
-
 {{ __('Conversation URL:') }} {{ $conversation->url() }}
 
---
-{{ __('Reply with any of these commands to update the conversation:') }}
-https://git.io/fNybs (todo)
+{{ \Eventy::action('email_notification_text.footer_links', $mailbox, $conversation, $threads) }}
 
 -----------------------------------------------------------
 

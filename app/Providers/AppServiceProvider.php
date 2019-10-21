@@ -38,8 +38,8 @@ class AppServiceProvider extends ServiceProvider
         // Forse HTTPS if using CloudFlare "Flexible SSL"
         // https://support.cloudflare.com/hc/en-us/articles/200170416-What-do-the-SSL-options-mean-
         if (\Config::get('app.force_https') == 'true') {
-            $_SERVER['HTTPS'] = 'on';
-            $_SERVER['SERVER_PORT'] = '443';
+            // $_SERVER['HTTPS'] = 'on';
+            // $_SERVER['SERVER_PORT'] = '443';
             $this->app['url']->forceScheme('https');
         }
 
@@ -47,7 +47,7 @@ class AppServiceProvider extends ServiceProvider
         if (!\Config::get('app.key') && !app()->runningInConsole() && !file_exists(storage_path('.installed'))) {
             // Not defined here yet
             //\Artisan::call("freescout:clear-cache");
-            redirect('/install.php')->send();
+            redirect(\Helper::getSubdirectory().'/install.php')->send();
         }
 
         // Process module registration error - disable module and show error to admin

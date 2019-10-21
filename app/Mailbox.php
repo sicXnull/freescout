@@ -4,9 +4,12 @@ namespace App;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Hash;
+use Watson\Rememberable\Rememberable;
 
 class Mailbox extends Model
 {
+    use Rememberable;
+
     /**
      * From Name: name that will appear in the From field when a customer views your email.
      */
@@ -90,7 +93,7 @@ class Mailbox extends Model
      * Default signature set when mailbox created.
      */
     const DEFAULT_SIGNATURE = '<br><span style="color:#808080;">--<br>
-{%mailbox.name%}<br></span>';
+{%mailbox.name%}</span>';
 
     /**
      * Default values.
@@ -104,7 +107,7 @@ class Mailbox extends Model
      *
      * @var [type]
      */
-    protected $fillable = ['name', 'slug', 'email', 'aliases', 'from_name', 'from_name_custom', 'ticket_status', 'ticket_assignee', 'template', 'signature', 'out_method', 'out_server', 'out_username', 'out_password', 'out_port', 'out_encryption', 'in_server', 'in_port', 'in_username', 'in_password', 'in_protocol', 'in_encryption', 'auto_reply_enabled', 'auto_reply_subject', 'auto_reply_message', 'office_hours_enabled', 'ratings', 'ratings_placement', 'ratings_text'];
+    protected $fillable = ['name', 'slug', 'email', 'aliases', 'auto_bcc', 'from_name', 'from_name_custom', 'ticket_status', 'ticket_assignee', 'template', 'signature', 'out_method', 'out_server', 'out_username', 'out_password', 'out_port', 'out_encryption', 'in_server', 'in_port', 'in_username', 'in_password', 'in_protocol', 'in_encryption', 'in_validate_cert', 'auto_reply_enabled', 'auto_reply_subject', 'auto_reply_message', 'office_hours_enabled', 'ratings', 'ratings_placement', 'ratings_text'];
 
     protected static function boot()
     {
@@ -259,6 +262,16 @@ class Mailbox extends Model
     }
 
     /**
+     * Get folder by it's type.
+     */
+    public function getFolderByType($type)
+    {
+        return $this->folders()
+            ->where('type', $type)
+            ->first();
+    }
+
+    /**
      * Get folders available for the current user.
      */
     public function getAssesibleFolders()
@@ -323,7 +336,7 @@ class Mailbox extends Model
     public function isOutActive()
     {
         if ($this->out_method != self::OUT_METHOD_PHP_MAIL && $this->out_method != self::OUT_METHOD_SENDMAIL
-            && (!$this->out_server || !$this->out_username || !$this->out_password)
+            && (!$this->out_server /*|| !$this->out_username || !$this->out_password*/)
         ) {
             return false;
         } else {
@@ -338,7 +351,7 @@ class Mailbox extends Model
     {
         $admins = User::where('role', User::ROLE_ADMIN)->select($fields)->remember(\App\Misc\Helper::cacheTime($cache))->get();
 
-        $users = $this->users()->select($fields)->get()->merge($admins)->unique();
+        $users = $this->users()->select($fields)->rememberForever()->get()->merge($admins)->unique();
 
         // Exclude deleted users (better to do it in PHP).
         foreach ($users as $i => $user) {
@@ -368,9 +381,11 @@ class Mailbox extends Model
      *
      * @return bool
      */
-    public function userHasAccess($user_id)
+    public function userHasAccess($user_id, $user = null)
     {
-        $user = User::find($user_id);
+        if (!$user) {
+            $user = User::find($user_id);
+        }
         if ($user && $user->isAdmin()) {
             return true;
         } else {
@@ -564,5 +579,33 @@ class Mailbox extends Model
         $this->fillable(array_merge($this->getFillable(), \Eventy::filter('mailbox.fillable_fields', [])));
 
         return parent::fill($attributes);
+    }
+
+    /**
+     * Set phones as JSON.
+     *
+     * @param array $phones_array
+     */
+    public function setInImapFolders(array $in_imap_folders)
+    {
+        $this->in_imap_folders = json_encode($in_imap_folders);
+    }
+
+    /**
+     * Get list of imap folders.
+     */
+    public function getInImapFolders()
+    {
+        return \Helper::jsonToArray($this->in_imap_folders);
+    }
+
+    public function outPasswordSafe()
+    {
+        return \Helper::safePassword($this->out_password);
+    }
+
+    public function inPasswordSafe()
+    {
+        return \Helper::safePassword($this->in_password);
     }
 }

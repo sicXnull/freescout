@@ -200,8 +200,8 @@ class MailboxesController extends Controller
             $validator = Validator::make($request->all(), [
                 'out_server'          => 'required|string|max:255',
                 'out_port'            => 'required|integer',
-                'out_username'        => 'required|string|max:100',
-                'out_password'        => 'required|string|max:255',
+                'out_username'        => 'nullable|string|max:100',
+                'out_password'        => 'nullable|string|max:255',
                 'out_encryption'      => 'required|integer',
             ]);
 
@@ -212,13 +212,22 @@ class MailboxesController extends Controller
             }
         }
 
-        $mailbox->fill($request->all());
+        // Do not save dummy password.
+        if (preg_match("/^\*+$/", $request->out_password)) {
+            $params = $request->except(['out_password']);
+        } else {
+            $params = $request->all();
+        }
+        $mailbox->fill($params);
         $mailbox->save();
 
         if (!empty($request->send_test_to)) {
             \Option::set('send_test_to', $request->send_test_to);
         }
 
+        // Sometimes background job continues to use old connection settings.
+        \Helper::queueWorkRestart();
+        
         \Session::flash('flash_success_floating', __('Connection settings saved!'));
 
         return redirect()->route('mailboxes.connection', ['id' => $id]);
@@ -256,7 +265,30 @@ class MailboxesController extends Controller
                         ->withInput();
         }
 
-        $mailbox->fill($request->all());
+        // Checkboxes
+        $request->merge([
+            'in_validate_cert' => ($request->filled('in_validate_cert') ?? false),
+        ]);
+
+        // Do not save dummy password.
+        if (preg_match("/^\*+$/", $request->in_password)) {
+            $params = $request->except(['in_password']);
+        } else {
+            $params = $request->all();
+        }
+
+        $mailbox->fill($params);
+
+        // Save IMAP Folders.
+        // Save all custom folders except INBOX.
+        $in_imap_folders = [];
+        foreach ($request->in_imap_folders as $imap_folder) {
+            if (mb_strtolower($imap_folder) != 'inbox') {
+                $in_imap_folders[] = $imap_folder;
+            }
+        }
+        $mailbox->setInImapFolders($in_imap_folders);
+
         $mailbox->save();
 
         \Session::flash('flash_success_floating', __('Connection settings saved!'));
@@ -412,6 +444,14 @@ class MailboxesController extends Controller
                     $response['msg'] = __('Please specify recipient of the test email');
                 }
 
+                // Check if outgoing port is open.
+                if (!$response['msg']) {
+                    $test_result = \Helper::checkPort($mailbox->out_server, $mailbox->out_port);
+                    if (!$test_result) {
+                        $response['msg'] = __(':host is not available on :port port. Make sure that :host address is correct and that outgoing port :port on YOUR server is open.', ['host' => '<strong>'.$mailbox->out_server.'</strong>', 'port' => '<strong>'.$mailbox->out_port.'</strong>']);
+                    }
+                }
+
                 if (!$response['msg']) {
                     $test_result = false;
 
@@ -441,22 +481,82 @@ class MailboxesController extends Controller
                 $mailbox = Mailbox::find($request->mailbox_id);
 
                 if (!$mailbox) {
-                    $response['msg'] = __('Conversation not found');
+                    $response['msg'] = __('Mailbox not found');
                 } elseif (!$user->can('update', $mailbox)) {
                     $response['msg'] = __('Not enough permissions');
                 }
 
+                // Check if outgoing port is open.
+                if (!$response['msg']) {
+                    $test_result = \Helper::checkPort($mailbox->in_server, $mailbox->in_port);
+                    if (!$test_result) {
+                        $response['msg'] = __(':host is not available on :port port. Make sure that :host address is correct and that outgoing port :port on YOUR server is open.', ['host' => '<strong>'.$mailbox->in_server.'</strong>', 'port' => '<strong>'.$mailbox->in_port.'</strong>']);
+                    }
+                }
+                
                 if (!$response['msg']) {
                     $test_result = false;
 
                     try {
-                        $test_result = \App\Misc\Mail::fetchTest($mailbox);
+                        $test_result = \MailHelper::fetchTest($mailbox);
                     } catch (\Exception $e) {
                         $response['msg'] = $e->getMessage();
                     }
 
                     if (!$test_result && !$response['msg']) {
                         $response['msg'] = __('Error occurend connecting to the server');
+                    }
+                }
+
+                if (!$response['msg']) {
+                    $response['status'] = 'success';
+                }
+                break;
+
+            // Retrieve a list of available IMAP folders from server.
+            case 'imap_folders':
+                $mailbox = Mailbox::find($request->mailbox_id);
+
+                if (!$mailbox) {
+                    $response['msg'] = __('Mailbox not found');
+                } elseif (!$user->can('update', $mailbox)) {
+                    $response['msg'] = __('Not enough permissions');
+                }
+
+                $response['folders'] = [];
+
+                if (!$response['msg']) {
+
+                    try {
+                        $client = \MailHelper::getMailboxClient($mailbox);
+                        $client->connect();
+
+                        $imap_folders = $client->getFolders();
+
+                        if (count($imap_folders)) {
+                            foreach ($imap_folders as $imap_folder) {
+                                if (!empty($imap_folder->name)) {
+                                    $response['folders'][] = $imap_folder->name;
+                                }
+                                // Maybe we need a recursion here.
+                                if (!empty($imap_folder->children)) {
+                                    foreach ($imap_folder->children as $child_imap_folder) {
+                                        if (!empty($child_imap_folder->fullName)) {
+                                            $response['folders'][] = $child_imap_folder->fullName;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (count($response['folders'])) {
+                            $response['msg_success'] = __('IMAP folders retrieved: '.implode(', ', $response['folders']));
+                        } else {
+                            $response['msg_success'] = __('Connected, but no IMAP folders found');
+                        }
+
+                    } catch (\Exception $e) {
+                        $response['msg'] = $e->getMessage();
                     }
                 }
 

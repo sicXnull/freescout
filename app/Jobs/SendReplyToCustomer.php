@@ -50,7 +50,36 @@ class SendReplyToCustomer implements ShouldQueue
      */
     public function handle()
     {
+        // When forwarding conversation is undone, new conversation is deleted.
+        if (!$this->conversation) {
+            return;
+        }
+
         $mailbox = $this->conversation->mailbox;
+
+        // Add forwarded conversation replies.
+        if ($this->conversation->threads_count == 1 && count($this->threads) == 1) {
+            $forward_child_thread = $this->threads[0];
+            if ($forward_child_thread->isForwarded() && $forward_child_thread->getForwardParentConversation()) {
+                
+                // Add replies from original conversation.
+                $forwarded_replies = $forward_child_thread->getForwardParentConversation()->getReplies();
+                $forwarded_replies = $forwarded_replies->sortByDesc(function ($item, $key) {
+                    return $item->created_at;
+                });
+                $forward_parent_thread = Thread::find($forward_child_thread->getMeta('forward_parent_thread_id'));
+
+                if ($forward_parent_thread) {
+                    // Remove threads created after forwarding.
+                    foreach ($forwarded_replies as $i => $thread) {
+                        if ($thread->created_at > $forward_parent_thread->created_at) {
+                            $forwarded_replies->forget($i);
+                        }
+                    }
+                    $this->threads = $this->threads->merge($forwarded_replies);
+                }
+            }
+        }
 
         // Threads has to be sorted here, if sorted before, they come here in wrong order
         $this->threads = $this->threads->sortByDesc(function ($item, $key) {
@@ -97,6 +126,14 @@ class SendReplyToCustomer implements ShouldQueue
         // Remove customer email from CC and BCC
         $cc_array = \App\Misc\Mail::removeEmailFromArray($cc_array, $this->customer_email);
         $bcc_array = \App\Misc\Mail::removeEmailFromArray($bcc_array, $this->customer_email);
+
+        // Auto Bcc.
+        if ($mailbox->auto_bcc) {
+            $auto_bcc = \MailHelper::sanitizeEmails($mailbox->auto_bcc);
+            if ($auto_bcc) {
+                $bcc_array = array_merge($bcc_array, $auto_bcc);
+            }
+        }
 
         // Remove from BCC emails which are present in CC
         foreach ($cc_array as $cc_email) {

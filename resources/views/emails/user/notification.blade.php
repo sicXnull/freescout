@@ -124,11 +124,7 @@
 														<td valign="top">
 															<div style="disdivlay:inline; font-family:Arial, 'Helvetica Neue', Helvetica, Tahoma, sans-serif; color:#b5b9bd; font-size:12px; line-height:16px; margin:0;">
 																@include('emails/user/thread_by')  
-							                                    @if ($thread->action_type == App\Thread::ACTION_TYPE_STATUS_CHANGED)
-							                                        {{ __("marked as") }} {{ $thread->getStatusName() }}
-							                                    @elseif ($thread->action_type == App\Thread::ACTION_TYPE_USER_CHANGED)
-							                                         {{ __("assigned to") }} {{ $thread->getAssigneeName(false, $user) }}
-							                                    @endif
+																{!! $thread->getActionText('', true, false, $user) !!}
 															</div>
 														</td>
 														<td valign="top">
@@ -154,7 +150,7 @@
 									                        <h3 style="font-family:Arial, 'Helvetica Neue', Helvetica, Tahoma, sans-serif; font-size:17px; line-height:22px; margin:0 0 2px 0; font-weight:normal;">
 																@if ($thread->type == App\Thread::TYPE_NOTE)
 																	<span style="color:#e6b216">
-																		<strong style="color:#000000;">{{ $thread->getCreatedBy()->getFullName(true) }}</strong> {{ __('added a note') }}
+																		{!! __(':person added a note', ['person' => '<strong style="color:#000000;">'.$thread->getCreatedBy()->getFullName(true).'</strong>']) !!}
 																	</span>
 																@else
 																	@if ($thread->type == App\Thread::TYPE_MESSAGE)
@@ -167,7 +163,20 @@
 																		@endphp
 																	@endif
 																	<span style="color:{{ $action_color }}">
-																		<strong style="color:#000000;">{{ $thread->getCreatedBy()->getFullName(true) }}</strong> @if ($loop->last){{ __('started the conversation') }}@else {{ __('replied') }} @endif
+																		@if ($thread->isForwarded())
+																			@php $trans_text = __(':person forwarded a conversation :forward_parent_conversation_number') @endphp
+																		@elseif ($loop->last)
+																			@php $trans_text = __(':person started the conversation') @endphp
+																		@else
+																			@php $trans_text = __(':person replied') @endphp
+																		@endif
+																		@php
+																			$trans_params = ['person' => '<strong style="color:#000000;">'.$thread->getCreatedBy()->getFullName(true).'</strong>'];
+																			if ($thread->isForwarded()) {
+																				$trans_params['forward_parent_conversation_number'] = '<a href="'.route('conversations.view', ['id' => $thread->getMeta('forward_parent_conversation_id')]).'#thread-'.$thread->getMeta('forward_parent_thread_id').'">#'.$thread->getMeta('forward_parent_conversation_number').'</a>';
+																			}
+																		@endphp
+																		{!! __($trans_text, $trans_params) !!}
 																	</span>
 																@endif
 															</h3>
@@ -187,17 +196,25 @@
 									                </tr>
 									                <tr>
 									                    <td colspan="2">
+									                    	@if ($thread->isForward())
+							                                    <div style="color: #b37100; background-color: #fff1cf; padding: 15px; margin-bottom: 20px; border: 1px solid #ffe19d;">
+							                                        {!! __(':person forwarded this conversation. Forwarded conversation: :forward_child_conversation_number', [
+							                                        'person' => ucfirst($thread->getForwardByFullName()),
+							                                        'forward_child_conversation_number' => '<a href="'.route('conversations.view', ['id' => $thread->getMeta('forward_child_conversation_id')]).'">#'.$thread->getMeta('forward_child_conversation_number').'</a>'
+							                                        ]) !!}
+							                                    </div>
+							                                @endif
 									                        <div style="font-family:Arial, 'Helvetica Neue', Helvetica, Tahoma, sans-serif; color:#444; font-size:14px; line-height:20px; margin:0;">
 																{!! $thread->body !!}
 															</div>
 
 															@if ($thread->has_attachments)
-																<table cellspacing="0" cellpadding="6" bgcolor="#f1f3f4">
+																<table cellspacing="0" cellpadding="6">
 																	<tr>
-																		<td bgcolor="#ffffff" height="15">&nbsp;</td>
+																		<td height="15">&nbsp;</td>
 																	<tr>
 																	<tr>
-																		<td>
+																		<td bgcolor="#f1f3f4">
 																			<p style="display:inline; margin:0; padding: 0 5px; line-height:18px; font-size:12px; font-family:Arial, 'Helvetica Neue', Helvetica, Tahoma, sans-serif; color:#494848;">
 																				<strong>{{ __('Attached:') }}</strong>
 																				@foreach ($thread->attachments as $attachment)
@@ -231,7 +248,7 @@
 					</tr>
 					<tr>
 						<td align="center">
-							<p style="display:inline; margin:0; padding:0; font-size:12px; font-family:Arial, 'Helvetica Neue', Helvetica, Tahoma, sans-serif; color:#B5B9BD; line-height: 22px;" align="center"><a href="{{ route('users.notifications', ['id' => $user->id]) }}" style="color:#B5B9BD;">{{ __('Notification Settings') }}</a>{{-- - <a href="https://github.com/freescout-helpdesk/freescout/issues/26" style="color:#B5B9BD;">{{ __('Available email commands') }}</a>--}} - <a href="{{ $mailbox->url() }}" style="color:#B5B9BD;">{{ $mailbox->name }}</a></p>
+							<p style="display:inline; margin:0; padding:0; font-size:12px; font-family:Arial, 'Helvetica Neue', Helvetica, Tahoma, sans-serif; color:#B5B9BD; line-height: 22px;" align="center"><a href="{{ route('users.notifications', ['id' => $user->id]) }}" style="color:#B5B9BD;">{{ __('Notification Settings') }}</a>{{ \Eventy::action('email_notification.footer_links', $mailbox, $conversation, $threads) }} - <a href="{{ $mailbox->url() }}" style="color:#B5B9BD;">{{ $mailbox->name }}</a></p>
 						</td>
 					</tr>
 					<tr>

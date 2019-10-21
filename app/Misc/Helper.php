@@ -6,6 +6,8 @@
 
 namespace App\Misc;
 
+use Carbon\Carbon;
+
 class Helper
 {
     /**
@@ -17,6 +19,11 @@ class Helper
      * Text preview max length.
      */
     const PREVIEW_MAXLENGTH = 255;
+
+    /**
+     * Deafult background job queue;
+     */
+    const QUEUE_DEFAULT = 'default';
 
     /**
      * Menu structure used to display active menu item.
@@ -80,52 +87,52 @@ class Helper
         'ar' => ['name'          => 'العربية',
                  'name_en'       => 'Arabic',
         ],
-        'ar_IQ' => ['name'          => 'العربية',
+        'ar-IQ' => ['name'          => 'العربية',
                     'name_en'       => 'Arabic (Iraq)',
         ],
-        'ar_LY' => ['name'          => 'العربية',
+        'ar-LY' => ['name'          => 'العربية',
                     'name_en'       => 'Arabic (Libya)',
         ],
-        'ar_MA' => ['name'          => 'العربية',
+        'ar-MA' => ['name'          => 'العربية',
                     'name_en'       => 'Arabic (Morocco)',
         ],
-        'ar_OM' => ['name'          => 'العربية',
+        'ar-OM' => ['name'          => 'العربية',
                     'name_en'       => 'Arabic (Oman)',
         ],
-        'ar_SY' => ['name'          => 'العربية',
+        'ar-SY' => ['name'          => 'العربية',
                     'name_en'       => 'Arabic (Syria)',
         ],
-        'ar_LB' => ['name'          => 'العربية',
+        'ar-LB' => ['name'          => 'العربية',
                     'name_en'       => 'Arabic (Lebanon)',
         ],
-        'ar_AE' => ['name'          => 'العربية',
+        'ar-AE' => ['name'          => 'العربية',
                     'name_en'       => 'Arabic (U.A.E.)',
         ],
-        'ar_QA' => ['name'          => 'العربية',
+        'ar-QA' => ['name'          => 'العربية',
                     'name_en'       => 'Arabic (Qatar)',
         ],
-        'ar_SA' => ['name'          => 'العربية',
+        'ar-SA' => ['name'          => 'العربية',
                     'name_en'       => 'Arabic (Saudi Arabia)',
         ],
-        'ar_EG' => ['name'          => 'العربية',
+        'ar-EG' => ['name'          => 'العربية',
                     'name_en'       => 'Arabic (Egypt)',
         ],
-        'ar_DZ' => ['name'          => 'العربية',
+        'ar-DZ' => ['name'          => 'العربية',
                     'name_en'       => 'Arabic (Algeria)',
         ],
-        'ar_TN' => ['name'          => 'العربية',
+        'ar-TN' => ['name'          => 'العربية',
                     'name_en'       => 'Arabic (Tunisia)',
         ],
-        'ar_YE' => ['name'          => 'العربية',
+        'ar-YE' => ['name'          => 'العربية',
                     'name_en'       => 'Arabic (Yemen)',
         ],
-        'ar_JO' => ['name'          => 'العربية',
+        'ar-JO' => ['name'          => 'العربية',
                     'name_en'       => 'Arabic (Jordan)',
         ],
-        'ar_KW' => ['name'          => 'العربية',
+        'ar-KW' => ['name'          => 'العربية',
                     'name_en'       => 'Arabic (Kuwait)',
         ],
-        'ar_BH' => ['name'          => 'العربية',
+        'ar-BH' => ['name'          => 'العربية',
                     'name_en'       => 'Arabic (Bahrain)',
         ],
         'eu' => ['name'          => 'Euskara',
@@ -143,16 +150,16 @@ class Helper
         'ca' => ['name'          => 'Català',
                  'name_en'       => 'Catalan',
         ],
-        'zh_CN' => ['name'          => '简体中文',
+        'zh-CN' => ['name'          => '简体中文',
                     'name_en'       => 'Chinese (Simplified)',
         ],
-        'zh_SG' => ['name'          => '简体中文',
+        'zh-SG' => ['name'          => '简体中文',
                     'name_en'       => 'Chinese (Singapore)',
         ],
-        'zh_TW' => ['name'          => '简体中文',
+        'zh-TW' => ['name'          => '简体中文',
                     'name_en'       => 'Chinese (Traditional)',
         ],
-        'zh_HK' => ['name'          => '简体中文',
+        'zh-HK' => ['name'          => '简体中文',
                     'name_en'       => 'Chinese (Hong Kong SAR)',
         ],
         'hr' => ['name'          => 'Hrvatski',
@@ -305,10 +312,10 @@ class Helper
         'pl' => ['name'          => 'Polski',
                  'name_en'       => 'Polish',
         ],
-        'pt' => ['name'          => 'Português',
+        'pt-PT' => ['name'          => 'Português',
                  'name_en'       => 'Portuguese (Portugal)',
         ],
-        'pt_BR' => ['name'          => 'Português do Brasil',
+        'pt-BR' => ['name'          => 'Português do Brasil',
                    'name_en'        => 'Portuguese (Brazil)',
         ],
         'ro' => ['name'          => 'Română',
@@ -456,9 +463,9 @@ class Helper
     }
 
     /**
-     * Get preview of the text in a plain form.
+     * Remove from text all tags, double spaces, etc.
      */
-    public static function textPreview($text, $length = self::PREVIEW_MAXLENGTH)
+    public static function stripTags($text)
     {
         // Remove all kinds of spaces after tags.
         // https://stackoverflow.com/questions/3230623/filter-all-types-of-whitespace-in-php
@@ -486,6 +493,16 @@ class Helper
         // $text = urldecode($text);
 
         $text = trim(preg_replace('/[ ]+/', ' ', $text));
+
+        return $text;
+    }
+
+    /**
+     * Get preview of the text in a plain form.
+     */
+    public static function textPreview($text, $length = self::PREVIEW_MAXLENGTH)
+    {
+        $text = self::stripTags($text);
 
         $text = mb_substr($text, 0, $length);
 
@@ -800,9 +817,9 @@ class Helper
      *
      * @return [type] [description]
      */
-    public static function clearCache()
+    public static function clearCache($options = [])
     {
-        \Artisan::call('freescout:clear-cache');
+        \Artisan::call('freescout:clear-cache', $options);
     }
 
     /**
@@ -881,6 +898,309 @@ class Helper
      */
     public static function htmlToText($text)
     {
+        // Process blockquotes.
+        $text = str_ireplace('<blockquote>', '<div>', $text);
+        $text = str_ireplace('</blockquote>', '</div>', $text);
         return (new \Html2Text\Html2Text($text))->getText();
+    }
+
+    /**
+     * Trim text removing non-breaking spaces also.
+     *
+     * @param  [type] $text [description]
+     * @return [type]       [description]
+     */
+    public static function trim($text)
+    {
+        $text = preg_replace("/^\s+/u", '', $text);
+        $text = preg_replace("/\s+$/u", '', $text);
+
+        return $text;
+    }
+
+    /**
+     * Unicode escape sequences like “\u00ed” to proper UTF-8 encoded characters.
+     *
+     * @param  [type] $text [description]
+     * @return [type]       [description]
+     */
+    public static function entities2utf8($text)
+    {
+        try {
+            return json_decode('"'.str_replace('"', '\\"', $text).'"');
+        } catch(\Exception $e) {
+            return $text;
+        }
+    }
+
+    /**
+     * Get app subdirectory in /subdirectory/1/2/ format.
+     */
+    public static function getSubdirectory($keep_trailing_slash = false, $keep_front_slash = false)
+    {
+        $subdirectory = '';
+
+        $app_url = config('app.url');
+
+        // Check host to ignore default values.
+        $app_host = parse_url($app_url, PHP_URL_HOST);
+
+        if ($app_url && !in_array($app_host, ['localhost', 'example.com'])) {
+            $subdirectory = parse_url($app_url, PHP_URL_PATH);
+        } else {
+            // Before app is installed
+            $subdirectory = $_SERVER['PHP_SELF'];
+
+            $filename = basename($_SERVER['SCRIPT_FILENAME']);
+
+            if (basename($_SERVER['SCRIPT_NAME']) === $filename) {
+                $subdirectory = $_SERVER['SCRIPT_NAME'];
+            } elseif (basename($_SERVER['PHP_SELF']) === $filename) {
+                $subdirectory = $_SERVER['PHP_SELF'];
+            } elseif (basename($_SERVER['ORIG_SCRIPT_NAME']) === $filename) {
+                $subdirectory = $_SERVER['ORIG_SCRIPT_NAME']; // 1and1 shared hosting compatibility
+            } else {
+                // Backtrack up the script_filename to find the portion matching
+                // php_self
+                $path = $_SERVER['PHP_SELF'];
+                $file = $_SERVER['SCRIPT_FILENAME'];
+                $segs = explode('/', trim($file, '/'));
+                $segs = array_reverse($segs);
+                $index = 0;
+                $last = \count($segs);
+                $subdirectory = '';
+                do {
+                    $seg = $segs[$index];
+                    $subdirectory = '/'.$seg.$subdirectory;
+                    ++$index;
+                } while ($last > $index && (false !== $pos = strpos($path, $subdirectory)) && 0 != $pos);
+            }
+        }
+
+        $subdirectory = str_replace('public/index.php', '', $subdirectory);
+        $subdirectory = str_replace('index.php', '', $subdirectory);
+
+        $subdirectory = trim($subdirectory, '/');
+        if ($keep_trailing_slash) {
+            $subdirectory .= '/';
+        }
+
+        if ($keep_front_slash && $subdirectory != '/') {
+            $subdirectory = '/'.$subdirectory;
+        }
+
+        return $subdirectory;
+    }
+
+    /**
+     * Check current route.
+     */
+    public static function isRoute($route_name)
+    {
+        $route = \Route::current();
+        if (!$route) {
+            return false;
+        }
+        $current = $route->getName();
+
+        if (is_array($route_name)) {
+            return in_array($current, $route_name);
+        } else {
+            return ($current == $route_name);
+        }
+    }
+
+    /**
+     * Check if passed app URL has default Laravel value.
+     */
+    public static function isDefaultAppUrl($app_url)
+    {
+        $app_host = parse_url($app_url, PHP_URL_HOST);
+
+        if ($app_url && !in_array($app_host, ['localhost', 'example.com'])) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    /**
+     * Stop all queue:work processes.
+     */
+    public static function queueWorkRestart()
+    {
+        \Cache::forever('illuminate:queue:restart', Carbon::now()->getTimestamp());
+    }
+
+    /**
+     * UTF-8 split text into parts with max. length.
+     */
+    public static function strSplitKeepWords($str, $max_length = 75)
+    {
+        $array_words = explode(' ', $str);
+
+        $currentLength = 0;
+
+        $index = 0;
+
+        $array_output = [''];
+
+        foreach ($array_words as $word) {
+            // +1 because the word will receive back the space in the end that it loses in explode()
+            $wordLength = strlen($word) + 1;
+
+            if (($currentLength + $wordLength) <= $max_length) {
+                $array_output[$index] .= $word . ' ';
+
+                $currentLength += $wordLength;
+            } else {
+                $index += 1;
+
+                $currentLength = $wordLength;
+
+                $array_output[$index] = $word;
+            }
+        }
+
+        return $array_output;
+    }
+
+    /**
+     * Replace new line with doble <br />.
+     */
+    public static function nl2brDouble($text)
+    {
+        return str_replace('<br />', '<br /><br />', nl2br($text));
+    }
+
+    /**
+     * Decode \u00ed.
+     */
+    public static function decodeUnicode($str)
+    {
+        $str = preg_replace_callback('/\\\\u([0-9a-fA-F]{4})/', function ($match) {
+            return mb_convert_encoding(pack('H*', $match[1]), 'UTF-8', 'UCS-2BE');
+        }, $str);
+
+        return $str;
+    }
+
+    /**
+     * Convert text into json without converting chars into \u0411.
+     */
+    public static function jsonEncodeUtf8($text)
+    {
+        return json_encode($text, JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Json encode to avoid "Unable to JSON encode payload. Error code: 5"
+     */
+    public static function jsonEncodeSafe($value, $options = 0, $depth = 512, $utfErrorFlag = false)
+    {
+        $encoded = json_encode($value, $options, $depth);
+        switch (json_last_error()) {
+            case JSON_ERROR_NONE:
+                return $encoded;
+            // case JSON_ERROR_DEPTH:
+            //     return 'Maximum stack depth exceeded'; // or trigger_error() or throw new Exception()
+            // case JSON_ERROR_STATE_MISMATCH:
+            //     return 'Underflow or the modes mismatch'; // or trigger_error() or throw new Exception()
+            // case JSON_ERROR_CTRL_CHAR:
+            //     return 'Unexpected control character found';
+            // case JSON_ERROR_SYNTAX:
+            //     return 'Syntax error, malformed JSON'; // or trigger_error() or throw new Exception()
+            case JSON_ERROR_UTF8:
+                $clean = self::utf8ize($value);
+                if ($utfErrorFlag) {
+                    //return 'UTF8 encoding error'; // or trigger_error() or throw new Exception()
+                }
+                return self::jsonEncodeSafe($clean, $options, $depth, true);
+            // default:
+            //     return 'Unknown error'; // or trigger_error() or throw new Exception()
+
+        }
+    }
+
+    public static function utf8ize($mixed)
+    {
+        if (is_array($mixed)) {
+            foreach ($mixed as $key => $value) {
+                $mixed[$key] = self::utf8ize($value);
+            }
+        } else if (is_string ($mixed)) {
+            return utf8_encode($mixed);
+        }
+        return $mixed;
+    }
+
+    /**
+     * Check if host is available on the port specified.
+     */
+    public static function checkPort($host, $port, $timeout = 10)
+    {
+        $connection = @fsockopen($host, $port);
+        if (is_resource($connection)) {
+            fclose($connection);
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public static function purifyHtml($html)
+    {
+        $html = \Purifier::clean($html);
+
+        // Remove all kinds of spaces after tags
+        // https://stackoverflow.com/questions/3230623/filter-all-types-of-whitespace-in-php
+        $html = preg_replace("/^(.*)>[\r\n]*\s+/mu", '$1>', $html);
+
+        return $html;
+    }
+
+    /**
+     * Replace password with asterisks.
+     */
+    public static function safePassword($password)
+    {
+        return str_repeat("*", mb_strlen($password));
+    }
+
+    /**
+     * Turn all URLs in clickable links.
+     * Released under public domain
+     * https://gist.github.com/jasny/2000705
+     *
+     * @param string $value
+     * @param array  $protocols  http/https, ftp, mail
+     * @param array  $attributes
+     * @return string
+     */
+    public static function linkify($value, $protocols = ['http', 'mail'], array $attributes = [])
+    {
+        // Link attributes
+        $attr = '';
+        foreach ($attributes as $key => $val) {
+            $attr .= ' ' . $key . '="' . htmlentities($val) . '"';
+        }
+
+        $links = array();
+
+        // Extract existing links and tags
+        $value = preg_replace_callback('~(<a .*?>.*?</a>|<.*?>)~i', function ($match) use (&$links) { return '<' . array_push($links, $match[1]) . '>'; }, $value);
+
+        // Extract text links for each protocol
+        foreach ((array)$protocols as $protocol) {
+            switch ($protocol) {
+                case 'http':
+                case 'https':   $value = preg_replace_callback('~(?:(https?)://([^\s<]+)|(www\.[^\s<]+?\.[^\s<]+))(?<![\.,:])~i', function ($match) use ($protocol, &$links, $attr) { if ($match[1]) $protocol = $match[1]; $link = $match[2] ?: $match[3]; return '<' . array_push($links, "<a $attr href=\"$protocol://$link\">$protocol://$link</a>") . '>'; }, $value); break;
+                case 'mail':    $value = preg_replace_callback('~([^\s<]+?@[^\s<]+?\.[^\s<]+)(?<![\.,:])~', function ($match) use (&$links, $attr) { return '<' . array_push($links, "<a $attr href=\"mailto:{$match[1]}\">{$match[1]}</a>") . '>'; }, $value); break;
+                default:        $value = preg_replace_callback('~' . preg_quote($protocol, '~') . '://([^\s<]+?)(?<![\.,:])~i', function ($match) use ($protocol, &$links, $attr) { return '<' . array_push($links, "<a $attr href=\"$protocol://{$match[1]}\">$protocol://{$match[1]}</a>") . '>'; }, $value); break;
+            }
+        }
+
+        // Insert all link
+        return preg_replace_callback('/<(\d+)>/', function ($match) use (&$links) { return $links[$match[1] - 1]; }, $value);
     }
 }

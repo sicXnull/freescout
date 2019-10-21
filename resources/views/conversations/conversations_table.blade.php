@@ -9,6 +9,12 @@
         // Preload users and customers
         App\Conversation::loadUsers($conversations);
         App\Conversation::loadCustomers($conversations);
+
+        // Get information on viewers
+        if (empty($no_checkboxes)) {
+            $viewers = App\Conversation::getViewersInfo($conversations, ['id', 'first_name', 'last_name'], [Auth::user()->id]);
+        }
+
         $conversations = \Eventy::filter('conversations_table.preload_table_data', $conversations);
     @endphp
 
@@ -43,14 +49,17 @@
                 <span>{{ __("Conversation") }}</span>
             </th>
             @if ($folder->type == App\Folder::TYPE_ASSIGNED || $folder->type == App\Folder::TYPE_CLOSED)
-                <th class="conv-owner dropdown">
-                    <span {{--data-target="#"--}} class="dropdown-toggle" data-toggle="dropdown">{{ __("Assigned To") }}</span>
+                <th class="conv-owner">
+                    <span>{{ __("Assigned To") }}</span>
+                </th>
+                {{--<th class="conv-owner dropdown">
+                    <span {{--data-target="#"- -}} class="dropdown-toggle" data-toggle="dropdown">{{ __("Assigned To") }}</span>
                     <ul class="dropdown-menu">
                           <li><a class="filter-owner" data-id="1" href="#"><span class="option-title">{{ __("Anyone") }}</span></a></li>
                           <li><a class="filter-owner" data-id="123" href="#"><span class="option-title">{{ __("Me") }}</span></a></li>
                           <li><a class="filter-owner" data-id="123" href="#"><span class="option-title">{{ __("User") }}</span></a></li>
                     </ul>
-                </th>
+                </th>--}}
             @endif
             <th class="conv-number">
                 <span>{{ __("Number") }}</span>
@@ -73,7 +82,9 @@
         <tbody>
             @foreach ($conversations as $conversation)
                 <tr class="conv-row @if ($conversation->isActive()) conv-active @endif" data-conversation_id="{{ $conversation->id }}">
-                    @if (empty($no_checkboxes))<td class="conv-current"></td>@endif
+                    @if (empty($no_checkboxes))<td class="conv-current">@if (!empty($viewers[$conversation->id]))
+                                <div class="viewer-badge @if (!empty($viewers[$conversation->id]['replying'])) viewer-replying @endif" data-toggle="tooltip" title="@if (!empty($viewers[$conversation->id]['replying'])){{ __(':user is replying', ['user' => $viewers[$conversation->id]['user']->getFullName()]) }}@else{{ __(':user is viewing', ['user' => $viewers[$conversation->id]['user']->getFullName()]) }}@endif"><div>
+                            @endif</td>@endif
                     @if (empty($no_checkboxes))
                         <td class="conv-cb">
                             <input type="checkbox" class="conv-checkbox magic-checkbox" id="cb-{{ $conversation->id }}" name="cb_{{ $conversation->id }}" value="{{ $conversation->id }}"><label for="cb-{{ $conversation->id }}"></label>
@@ -116,6 +127,9 @@
                             <p>
                                 @if ($conversation->has_attachments)
                                     <i class="conv-attachment-mobile glyphicon glyphicon-paperclip"></i>
+                                @endif
+                                @if ($conversation->isPhone())
+                                    <i class="glyphicon glyphicon-earphone"></i>
                                 @endif
                                 {{--<span class="conv-subject-number">#{{ $conversation->number }} </span>--}}@action('conversations_table.before_subject', $conversation){{ $conversation->getSubject() }}
                             </p>

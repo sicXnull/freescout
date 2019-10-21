@@ -1,7 +1,10 @@
 <?php
-
+/**
+ * Send notifications to users by email and in browser.
+ */
 namespace App\Listeners;
 
+use App\Conversation;
 use App\Subscription;
 
 class SendNotificationToUsers
@@ -32,14 +35,21 @@ class SendNotificationToUsers
                 break;
             case 'App\Events\UserAddedNote':
                 $caused_by_user_id = $event->thread->created_by_user_id;
-                $event_type = Subscription::EVENT_TYPE_USER_ADDED_NOTE;
+                // When conversation is forwarded only notification
+                // about child forward conversation is sent.
+                if (!$event->thread->isForward()) {
+                    $event_type = Subscription::EVENT_TYPE_USER_ADDED_NOTE;
+                }
                 break;
             case 'App\Events\UserCreatedConversation':
                 $caused_by_user_id = $event->conversation->created_by_user_id;
                 $event_type = Subscription::EVENT_TYPE_NEW;
                 break;
             case 'App\Events\CustomerCreatedConversation':
-                $event_type = Subscription::EVENT_TYPE_NEW;
+                // Do not send notification if conversation is spam.
+                if ($event->conversation->status != Conversation::STATUS_SPAM) {
+                    $event_type = Subscription::EVENT_TYPE_NEW;
+                }
                 break;
             case 'App\Events\ConversationUserChanged':
                 $caused_by_user_id = $event->user->id;

@@ -1,4 +1,4 @@
-{{-- 
+{{--
     Languages strings and custom variables passed to JS.
     After changing this file make sure to run:
         php artisan freescout:build
@@ -9,10 +9,12 @@
  */
 {{-- Global vars for JS. Set in /app/Console/Commands/GenerateJs.php --}}
 var Vars = {
-    public_url: ''
+    public_url: '{{ config('app.url') }}',
+    subtype_forward: '{{ \App\Thread::SUBTYPE_FORWARD }}',
+    conv_type_phone: '{{ \App\Conversation::TYPE_PHONE }}'
 };
 
-{{-- 
+{{--
     Localized JS strings.
     Usage:
         Lang.get('messages.ajax_error');
@@ -24,6 +26,7 @@ var LangMessages = {
             {{-- Add here strings which you need to be translated in JS--}}
             "ajax_error": "{{ __("Error occured. Please check your internet connection and try again.") }}",
             "error_occured": "{{ __("Error occured. Please try again later.") }}",
+            "error_occured_updating": "{{ __('Error occured. Please try again or try another :%a_start%update method:%a_end%', ['%a_start%' => '<a href="'.config('app.freescout_url').'/docs/update/" target="_blank">', '%a_end%' => '</a>']) }}",
             "upload_attachments": "{{ __("Upload Attachments") }}",
             "saved_replies": "{{ __("Saved Replies") }}",
             "save_draft": "{{ __("Save Draft") }}",
@@ -42,6 +45,10 @@ var LangMessages = {
             "first_name": "{{ __("First Name") }}",
             "last_name": "{{ __("Last Name") }}",
             "email_addr": "{{ __("Email Address") }}",
+            "job_title": "{{ __("Job title") }}",
+            "phone": "{{ __("Phone number") }}",
+            "photo_url": "{{ __("Profile Photo (URL)") }}",
+            "from_name": "{{ __("From name") }}",
             "user": "{{ __("User") }}",
             "confirm_change_customer": "{{ __("Change the customer to :customer_email?") }}",
             "invite_sent": "{{ __("Invite email has been sent") }}",
@@ -63,6 +70,9 @@ var LangMessages = {
             "confirm_update": "{{ __("Please backup application files and database before you continue.") }}",
             "remove_format": "{{ __("Remove Formatting") }}",
             "list": "{{ __("List") }}",
+            "add_lower": "{{ __("add") }}",
+            "user_viewing": "{{ __(":user is viewing") }}",
+            "user_replying": "{{ __(":user is replying") }}",
 
             "update": "{{ __("Update") }}"
         }@if (!$loop->last),@endif

@@ -1,6 +1,7 @@
 <div class="dropdown sidebar-title sidebar-title-extra">
     <span class="sidebar-title-extra-value active-count">{{ $folder->getTypeName() }} ({{ $folder->active_count }})</span>
     <span class="sidebar-title-real">{{ $mailbox->name }}</span>
+    <span class="sidebar-title-email">{{ $mailbox->email }}</span>
 </div>
 <ul class="sidebar-menu">
     @foreach ($folders as $folder_item)
@@ -13,7 +14,11 @@
             <li class="@if ($folder_item->id == $folder->id) active @endif">
                 <a href="{{ route('mailboxes.view.folder', ['id'=>$mailbox->id, 'folder_id'=>$folder_item->id]) }}" @if (!$folder_item->active_count) class="no-active" @endif><i class="glyphicon glyphicon-{{ $folder_item->getTypeIcon() }}"></i> {{ $folder_item->getTypeName() }}
                     @php
-                        $active_count = $folder_item->getCount($folders);
+                        if ($folder_item->type == App\Folder::TYPE_SPAM) {
+                            $active_count = $folder_item->total_count;
+                        } else {
+                            $active_count = $folder_item->getCount($folders);
+                        }
                     @endphp
                     @if ($active_count)<span class="active-count pull-right" data-toggle="tooltip" title="{{ __("Active Conversations") }}">
                         {{ $active_count }}</span>

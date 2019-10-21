@@ -128,6 +128,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Cached mailboxes.
+     */
+    public function mailboxes_cached()
+    {
+        return $this->mailboxes()->rememberForever();
+    }
+
+    /**
      * Get conversations assigned to user.
      */
     public function conversations()
@@ -199,12 +207,20 @@ class User extends Authenticatable
     /**
      * Get mailboxes to which user has access.
      */
-    public function mailboxesCanView()
+    public function mailboxesCanView($cache = false)
     {
         if ($this->isAdmin()) {
-            return Mailbox::all();
+            if ($cache) {
+                return Mailbox::rememberForever()->get();
+            } else {
+                return Mailbox::all();
+            }
         } else {
-            return $this->mailboxes;
+            if ($cache) {
+                return $this->mailboxes_cached;
+            } else {
+                return $this->mailboxes;
+            }
         }
     }
 
@@ -218,6 +234,12 @@ class User extends Authenticatable
         } else {
             return $this->mailboxes()->pluck('mailboxes.id')->toArray();
         }
+    }
+
+    public function hasAccessToMailbox($mailbox_id)
+    {
+        $ids = $this->mailboxesIdsCanView();
+        return in_array($mailbox_id, $ids);
     }
 
     /**
@@ -305,6 +327,11 @@ class User extends Authenticatable
         if (!$user) {
             $user = auth()->user();
         }
+        if (is_string($date)) {
+            // Convert string in to Carbon
+            $date = Carbon::parse($date);
+        }
+
         if ($user) {
             if ($user->time_format == self::TIME_FORMAT_12) {
                 $format = strtr($format, [
@@ -340,6 +367,11 @@ class User extends Authenticatable
     {
         if (!$date) {
             return '';
+        }
+
+        if (is_string($date)) {
+            // Convert string in to Carbon
+            $date = Carbon::parse($date);
         }
 
         $user = auth()->user();
@@ -380,7 +412,7 @@ class User extends Authenticatable
         }
 
         if (stripos($dateForHuman, 'just') === false) {
-            return $dateForHuman.' @ '.$date->format('H:i');
+            return __(':date @ :time', ['date' => $dateForHuman, 'time' => $date->format('H:i')]);
         } else {
             return $dateForHuman;
         }
@@ -390,7 +422,7 @@ class User extends Authenticatable
     {
         $user_permission_names = [
             self::PERM_DELETE_CONVERSATIONS => __('Users are allowed to delete notes/conversations'),
-            self::PERM_EDIT_CONVERSATIONS   => __('Users are allowed to edit notes/threads'),
+            self::PERM_EDIT_CONVERSATIONS   => __('Users are allowed to edit notes/replies'),
             self::PERM_EDIT_SAVED_REPLIES   => __('Users are allowed to edit/delete saved replies'),
             self::PERM_EDIT_TAGS            => __('Users are allowed to manage tags'),
         ];
@@ -431,7 +463,7 @@ class User extends Authenticatable
         }
         // We are using remember_token as a hash for invite
         if (!$this->invite_hash) {
-            $this->invite_hash = Str::random(60);
+            $this->setInviteHash();
             $this->save();
         }
 
@@ -478,6 +510,22 @@ class User extends Authenticatable
         saveToSendLog($this, SendLog::STATUS_ACCEPTED);
 
         return true;
+    }
+
+    /**
+     * Generate and set password.
+     */
+    public function setPassword()
+    {
+        $this->password = Hash::make($this->generateRandomPassword());
+    }
+
+    /**
+     * Generate and set invite_hash.
+     */
+    public function setInviteHash()
+    {
+        $this->invite_hash = Str::random(60);
     }
 
     /**
@@ -578,12 +626,16 @@ class User extends Authenticatable
         \Cache::forget('user_web_notifications_'.$this->id);
     }
 
-    public function getPhotoUrl()
+    public function getPhotoUrl($default_if_empty = true)
     {
-        if (!empty($this->photo_url)) {
-            return Storage::url(self::PHOTO_DIRECTORY.DIRECTORY_SEPARATOR.$this->photo_url);
+        if (!empty($this->photo_url) || !$default_if_empty) {
+            if (!empty($this->photo_url)) {
+                return Storage::url(self::PHOTO_DIRECTORY.DIRECTORY_SEPARATOR.$this->photo_url);
+            } else {
+                return '';
+            }
         } else {
-            return '/img/default-avatar.png';
+            return asset('/img/default-avatar.png');
         }
     }
 
@@ -729,5 +781,44 @@ class User extends Authenticatable
     public function isDeleted()
     {
         return $this->status == self::STATUS_DELETED;
+    }
+
+    /**
+     * Get users which current user can see.
+     */
+    public function whichUsersCanView($mailboxes = null)
+    {
+        if ($this->isAdmin()) {
+            return User::all();
+        } else {
+            // Get user mailboxes.
+            if ($mailboxes == null) {
+                $mailbox_ids = $this->mailboxesIdsCanView();
+            } else {
+                $mailbox_ids = $mailboxes->pluck('id')->toArray();
+            }
+
+            // Get users
+            $users = User::select('users.*')
+                ->join('mailbox_user', function ($join) {
+                    $join->on('mailbox_user.user_id', '=', 'users.id');
+                })
+                ->whereIn('mailbox_user.mailbox_id', $mailbox_ids)
+                ->get();
+
+            return $users;
+        }
+    }
+
+    /**
+     * Get user initials: FL.
+     */
+    public function getInitials($length = 2)
+    {
+        if ($length == 2) {
+            return strtoupper(mb_substr($this->first_name, 0, 1)).strtoupper(mb_substr($this->last_name, 0, 1));
+        } else {
+            return strtoupper(mb_substr($this->first_name, 0, 1));
+        }
     }
 }

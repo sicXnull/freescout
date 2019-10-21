@@ -94,6 +94,8 @@ class EnvironmentController extends Controller
      */
     public function saveWizard(Request $request, Redirector $redirect)
     {
+        $envConfig = $this->EnvironmentManager->getEnvContent();
+
         $rules = config('installer.environment.form.rules');
         $messages = [
             'environment_custom.required_if' => trans('installer_messages.environment.wizard.form.name_required'),
@@ -125,6 +127,10 @@ class EnvironmentController extends Controller
 
                     $request->database_charset = 'utf8';
                     $request->database_collation = 'utf8_unicode_ci';
+
+                    $this->testDbConnect($request);
+                } else {
+                    throw $e;
                 }
             }
         } catch (\Exception $e) {

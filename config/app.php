@@ -12,7 +12,7 @@ return [
     | or any other location as required by the application or its packages.
     */
 
-    'version' => '1.1.6',
+    'version' => '1.3.8',
 
     /*
     |--------------------------------------------------------------------------
@@ -92,7 +92,7 @@ return [
     */
 
     'locale'          => env('APP_LOCALE', 'en'),
-    'locales'         => ['en', 'fr', 'it'],
+    'locales'         => ['en', 'fr', 'it', 'pt-PT', 'pt-BR'],
     'default_locale'  => 'en',
 
     /*
@@ -210,6 +210,13 @@ return [
     */
     'alert_logs'        => env('APP_ALERT_LOGS', false),
     'alert_logs_period' => env('APP_ALERT_LOGS_PERIOD', ''),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Fetch Mail Schedule.
+    |-------------------------------------------------------------------------
+    */
+    'fetch_schedule'    => env('APP_FETCH_SCHEDULE', 1),
 
     /*
     |--------------------------------------------------------------------------
@@ -358,6 +365,7 @@ return [
         'Helper'       => App\Misc\Helper::class,
         'MailHelper'   => App\Misc\Mail::class,
         'Option'       => App\Option::class,
+        'Str'          => Illuminate\Support\Str::class,
         // Autodiscovery did not work for this one, becasuse it's composer.json
         // does not have a `extra` section.
         'Updater'      => Codedge\Updater\UpdaterFacade::class,

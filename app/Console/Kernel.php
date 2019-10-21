@@ -5,6 +5,8 @@ namespace App\Console;
 use Carbon\Carbon;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
+use App\Misc\Mail;
+use App\Option;
 
 class Kernel extends ConsoleKernel
 {
@@ -47,6 +49,11 @@ class Kernel extends ConsoleKernel
         $schedule->command('freescout:module-check-licenses')
             ->daily();
 
+        // Check if user finished viewing conversation.
+        $schedule->command('freescout:check-conv-viewers')
+            ->everyMinute()
+            ->withoutOverlapping();
+
         // Logs monitoring.
         $alert_logs_period = config('app.alert_logs_period');
         if (config('app.alert_logs') && $alert_logs_period) {
@@ -73,10 +80,30 @@ class Kernel extends ConsoleKernel
         }
 
         // Fetch emails from mailboxes
-        $schedule->command('freescout:fetch-emails')
-            ->everyMinute()
+        $fetch_command = $schedule->command('freescout:fetch-emails')
             ->withoutOverlapping()
             ->sendOutputTo(storage_path().'/logs/fetch-emails.log');
+
+        switch (config('app.fetch_schedule')) {
+            case Mail::FETCH_SCHEDULE_EVERY_FIVE_MINUTES:
+                $fetch_command->everyFiveMinutes();
+                break;
+            case Mail::FETCH_SCHEDULE_EVERY_TEN_MINUTES:
+                $fetch_command->everyTenMinutes();
+                break;
+            case Mail::FETCH_SCHEDULE_EVERY_FIFTEEN_MINUTES:
+                $fetch_command->everyFifteenMinutes();
+                break;
+            case Mail::FETCH_SCHEDULE_EVERY_THIRTY_MINUTES:
+                $fetch_command->everyThirtyMinutes();
+                break;
+            case Mail::FETCH_SCHEDULE_HOURLY:
+                $fetch_command->Hourly();
+                break;
+            default:
+                $fetch_command->everyMinute();
+                break;
+        }
 
         $schedule = \Eventy::filter('schedule', $schedule);
 
@@ -90,7 +117,7 @@ class Kernel extends ConsoleKernel
             if (count($running_commands) > 1) {
                 // Stop all queue:work processes.
                 // queue:work command is stopped by settings a cache key
-                \Cache::forever('illuminate:queue:restart', Carbon::now()->getTimestamp());
+                \Helper::queueWorkRestart();
                 // Sometimes processes stuck and just continue running, so we need to kill them.
                 // Sleep to let processes stop.
                 sleep(1);

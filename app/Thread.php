@@ -27,10 +27,10 @@ class Thread extends Model
     const TYPE_NOTE = 3;
     // Thread status change
     const TYPE_LINEITEM = 4;
-    const TYPE_PHONE = 5;
-    // Forwarded threads
-    const TYPE_FORWARDPARENT = 6;
-    const TYPE_FORWARDCHILD = 7;
+    //const TYPE_PHONE = 5;
+    // Forwarded threads - used in API only.
+    //const TYPE_FORWARDPARENT = 6;
+    //const TYPE_FORWARDCHILD = 7;
     const TYPE_CHAT = 8;
 
     public static $types = [
@@ -41,14 +41,20 @@ class Thread extends Model
         self::TYPE_NOTE    => 'note',
         // lineitem represents a change of state on the conversation. This could include, but not limited to, the conversation was assigned, the status changed, the conversation was moved from one mailbox to another, etc. A line item won’t have a body, to/cc/bcc lists, or attachments.
         self::TYPE_LINEITEM => 'lineitem',
-        self::TYPE_PHONE    => 'phone',
+        //self::TYPE_PHONE    => 'phone',
         // When a conversation is forwarded, a new conversation is created to represent the forwarded conversation.
         // forwardparent is the type set on the thread of the original conversation that initiated the forward event.
-        self::TYPE_FORWARDPARENT => 'forwardparent',
+        //self::TYPE_FORWARDPARENT => 'forwardparent',
         // forwardchild is the type set on the first thread of the new forwarded conversation.
-        self::TYPE_FORWARDCHILD => 'forwardchild',
+        //self::TYPE_FORWARDCHILD => 'forwardchild',
         self::TYPE_CHAT         => 'chat',
     ];
+
+    /**
+     * Subtypes (for notes mostly)
+     */
+    const SUBTYPE_FORWARD = 1;
+    const SUBTYPE_PHONE = 2;
 
     /**
      * Statuses (code must be equal to conversations statuses).
@@ -86,6 +92,7 @@ class Thread extends Model
 
     /**
      * Action associated with the line item.
+     * It is recommended to add custom action types between 100 and 1000
      */
     // Conversation's status changed
     const ACTION_TYPE_STATUS_CHANGED = 1;
@@ -143,6 +150,7 @@ class Thread extends Model
         'created_at',
         'updated_at',
         'deleted_at',
+        'edited_at',
     ];
 
     /**
@@ -235,7 +243,7 @@ class Thread extends Model
     }
 
     /**
-     * Get user who edited draft.
+     * Get user who edited thread.
      */
     public function edited_by_user()
     {
@@ -243,19 +251,52 @@ class Thread extends Model
     }
 
     /**
+     * Get user who edited thread (cached).
+     */
+    public function edited_by_user_cached()
+    {
+        return $this->edited_by_user()->rememberForever();
+    }
+
+    /**
      * Get sanitized body HTML.
      *
      * @return string
      */
-    public function getCleanBody()
+    public function getCleanBody($body = '')
     {
-        $body = \Purifier::clean($this->body);
+        if (!$body) {
+            $body = $this->body;
+        }
 
-        // Remove all kinds of spaces after tags
-        // https://stackoverflow.com/questions/3230623/filter-all-types-of-whitespace-in-php
-        $body = preg_replace("/^(.*)>[\r\n]*\s+/mu", '$1>', $body);
+        return \Helper::purifyHtml($body);
+    }
 
-        return $body;
+    /**
+     * Convert body to plain text.
+     */
+    public function getBodyAsText()
+    {
+        return \Helper::htmlToText($this->body);
+    }
+
+    public function getBodyWithFormatedLinks(string $body = '') :string
+    {
+        if (!$body) {
+            $body = $this->body;
+        }
+
+        return \Helper::linkify($this->getCleanBody($body));
+    }
+
+    /**
+     * Get sanitized body HTML.
+     *
+     * @return string
+     */
+    public function getCleanBodyOriginal()
+    {
+        return $this->getCleanBody($this->body_original);
     }
 
     /**
@@ -329,7 +370,7 @@ class Thread extends Model
         $emails_array = Conversation::sanitizeEmails($emails);
         if ($emails_array) {
             $emails_array = array_unique($emails_array);
-            $this->to = json_encode($emails_array);
+            $this->to = \Helper::jsonEncodeUtf8($emails_array);
         } else {
             $this->to = null;
         }
@@ -340,7 +381,7 @@ class Thread extends Model
         $emails_array = Conversation::sanitizeEmails($emails);
         if ($emails_array) {
             $emails_array = array_unique($emails_array);
-            $this->cc = json_encode($emails_array);
+            $this->cc = \Helper::jsonEncodeUtf8($emails_array);
         } else {
             $this->cc = null;
         }
@@ -351,7 +392,7 @@ class Thread extends Model
         $emails_array = Conversation::sanitizeEmails($emails);
         if ($emails_array) {
             $emails_array = array_unique($emails_array);
-            $this->bcc = json_encode($emails_array);
+            $this->bcc = \Helper::jsonEncodeUtf8($emails_array);
         } else {
             $this->bcc = null;
         }
@@ -478,15 +519,12 @@ class Thread extends Model
     }
 
     /**
-     * Description of what happened.
+     * Get action's person.
      */
-    public function getActionDescription($conversation_number, $escape = true)
+    public function getActionPerson($conversation_number = '')
     {
         $person = '';
-        $did_this = '';
 
-        // Person
-        $person = '';
         if ($this->type == self::TYPE_CUSTOMER) {
             $person = $this->customer_cached->getFullName(true);
         } elseif ($this->state == self::STATE_DRAFT && !empty($this->edited_by_user_id)) {
@@ -504,14 +542,54 @@ class Thread extends Model
             }
         }
 
+        // https://github.com/tormjens/eventy/issues/19
+        $person = \Eventy::filter('thread.action_person', $person, $this, $conversation_number);
+
+        return $person;
+    }
+
+    /**
+     * Get action text.
+     */
+    public function getActionText($conversation_number = '', $escape = false, $strip_tags = false, $by_user = null)
+    {
+        $did_this = '';
+
         // Did this
         if ($this->type == self::TYPE_LINEITEM) {
+
             if ($this->action_type == self::ACTION_TYPE_STATUS_CHANGED) {
-                $did_this = __('marked as :status_name conversation #:conversation_number', ['status_name' => $this->getStatusName(), 'conversation_number' => $conversation_number]);
+                if ($conversation_number) {
+                    $did_this = __('marked as :status_name conversation #:conversation_number', ['status_name' => $this->getStatusName(), 'conversation_number' => $conversation_number]);
+                } else {
+                    $did_this = __("marked as :status_name", ['status_name' => $this->getStatusName()]);
+                }
             } elseif ($this->action_type == self::ACTION_TYPE_USER_CHANGED) {
-                $did_this = __('assigned :assignee convsersation #:conversation_number', ['assignee' => $this->getAssigneeName(false, null), 'conversation_number' => $conversation_number]);
+                $assignee = $this->getAssigneeName(false, $by_user);
+                if ($escape) {
+                    $assignee = htmlspecialchars($assignee);
+                }
+                if ($conversation_number) {
+                    $did_this = __('assigned :assignee convsersation #:conversation_number', ['assignee' => $assignee, 'conversation_number' => $conversation_number]);
+                } else {
+                    $did_this = __("assigned to :assignee", ['assignee' => $assignee]);
+                }
             } elseif ($this->action_type == self::ACTION_TYPE_CUSTOMER_CHANGED) {
-                $did_this = __('changed the customer to :customer in conversation #:conversation_number', ['customer' => $this->customer->getFullName(true), 'conversation_number' => $conversation_number]);
+                if ($conversation_number) {
+                    $did_this = __('changed the customer to :customer in conversation #:conversation_number', ['customer' => $this->customer->getFullName(true), 'conversation_number' => $conversation_number]);
+                } else {
+                    $customer_name = $this->customer_cached->getFullName(true);
+                    if ($escape) {
+                        $customer_name = htmlspecialchars($customer_name);
+                    }
+                    $did_this = __("changed the customer to :customer", ['customer' => '<a href="'.$this->customer_cached->url().'" title="'.$this->action_data.'" class="link-black">'.$customer_name.'</a>']);
+                }
+            } elseif ($this->action_type == self::ACTION_TYPE_DELETED_TICKET) {
+                $did_this = __("deleted");
+            } elseif ($this->action_type == self::ACTION_TYPE_RESTORE_TICKET) {
+                $did_this = __("restored");
+            } elseif ($this->action_type == self::ACTION_TYPE_MOVED_FROM_MAILBOX) {
+                $did_this = __("moved conversation from another mailbox");
             }
         } elseif ($this->state == self::STATE_DRAFT) {
             if (empty($this->edited_by_user_id)) {
@@ -520,7 +598,9 @@ class Thread extends Model
                 $did_this = __("edited :creator's draft", ['creator' => $this->created_by_user_cached->getFirstName()]);
             }
         } else {
-            if ($this->first) {
+            if ($this->isForwarded()) {
+                $did_this = __('forwarded a conversation #:forward_parent_conversation_number', ['forward_parent_conversation_number' => $this->getMeta('forward_parent_conversation_number')]);
+            } elseif ($this->first) {
                 $did_this = __('started a new conversation #:conversation_number', ['conversation_number' => $conversation_number]);
             } elseif ($this->type == self::TYPE_NOTE) {
                 $did_this = __('added a note to conversation #:conversation_number', ['conversation_number' => $conversation_number]);
@@ -528,6 +608,24 @@ class Thread extends Model
                 $did_this = __('replied to conversation #:conversation_number', ['conversation_number' => $conversation_number]);
             }
         }
+
+        $did_this = \Eventy::filter('thread.action_text', $did_this, $this, $conversation_number, $escape);
+
+        if ($strip_tags) {
+            $did_this = strip_tags($did_this);
+        }
+
+        return $did_this;
+    }
+
+    /**
+     * Description of what happened.
+     */
+    public function getActionDescription($conversation_number, $escape = true)
+    {
+        // Person
+        $person = $this->getActionPerson($conversation_number);
+        $did_this = $this->getActionText($conversation_number);
 
         $description = ':person_tag_start:person:person_tag_end :did_this';
         if ($escape) {
@@ -669,7 +767,7 @@ class Thread extends Model
             } else {
                 $send_status_data = $new_data;
             }
-            $this->send_status_data = json_encode($send_status_data);
+            $this->send_status_data = \Helper::jsonEncodeUtf8($send_status_data);
         } else {
             $this->send_status_data = null;
         }
@@ -682,7 +780,7 @@ class Thread extends Model
 
     /**
      * Create thread.
-     * 
+     *
      * @param  [type] $conversation_id [description]
      * @param  [type] $text            [description]
      * @param  array  $data            [description]
@@ -737,11 +835,157 @@ class Thread extends Model
         if (!empty($data['created_by_user_id'])) {
             $thread->created_by_user_id = $data['created_by_user_id'];
         }
+        if (!empty($data['action_type'])) {
+            $thread->action_type = $data['action_type'];
+        }
 
         if ($save) {
             $thread->save();
         }
 
         return $thread;
+    }
+
+    /**
+     * Get full name of the user who edited thread.
+     */
+    public function getEditedByUserName()
+    {
+        $name = '';
+
+        if (!$this->edited_by_user_id) {
+            return '';
+        }
+
+        if (auth()->user() && $this->edited_by_user_id == auth()->user()->id) {
+            $name = __('you');
+        } else {
+            $name = $this->edited_by_user_cached->getFullName();
+        }
+
+        return $name;
+    }
+
+/**
+     * Get thread meta data as array.
+     */
+    public function getMetas()
+    {
+        return \Helper::jsonToArray($this->meta);
+    }
+
+    /**
+     * Set thread meta value.
+     */
+    public function setMetas($data)
+    {
+        $this->meta = \Helper::jsonEncodeUtf8($data);
+    }
+
+    /**
+     * Get thread meta value.
+     */
+    public function getMeta($key, $default = null)
+    {
+        $metas = $this->getMetas();
+        if (isset($metas[$key])) {
+            return $metas[$key];
+        } else {
+            return $default;
+        }
+    }
+
+    /**
+     * Set thread meta value.
+     */
+    public function setMeta($key, $value)
+    {
+        $metas = $this->getMetas();
+        $metas[$key] = $value;
+        $this->setMetas($metas);
+    }
+
+    /**
+     * Get full name of the user who forwarded conversation.
+     */
+    public function getForwardByFullName($by_user = null)
+    {
+        if (!$by_user) {
+            $by_user = auth()->user();
+        }
+        if ($by_user && $this->created_by_user_id == $by_user->id) {
+            $name = __('you');
+        } else {
+            $name = $this->created_by_user->getFullName();
+        }
+
+        return $name;
+    }
+
+    /**
+     * Is this a note informing that conversation has been forwarded.
+     */
+    public function isForward()
+    {
+        return ($this->subtype == \App\Thread::SUBTYPE_FORWARD);
+    }
+
+    /**
+     * Is this a forwarded conversation.
+     */
+    public function isForwarded()
+    {
+        if ($this->getMeta('forward_parent_conversation_id')) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * Is this thread a note.
+     */
+    public function isNote()
+    {
+        return ($this->type == \App\Thread::TYPE_NOTE);
+    }
+
+    /**
+     * Get forwarded conversation.
+     */
+    public function getForwardParentConversation()
+    {
+        return Conversation::where('id', $this->getMeta('forward_parent_conversation_id'))
+            ->rememberForever()
+            ->first();
+    }
+
+    /**
+     * Get forward child conversation.
+     */
+    public function getForwardChildConversation()
+    {
+        return Conversation::where('id', $this->getMeta('forward_child_conversation_id'))
+            ->first();
+    }
+
+    /**
+     * Fetch body via IMAP.
+     */
+    public function fetchBody()
+    {
+        $message = \MailHelper::fetchMessage($this->conversation->mailbox, $this->message_id);
+
+        if (!$message) {
+            return '';
+        }
+
+        $body = $message->getHTMLBody();
+
+        if (!$body) {
+            $body = $message->getTextBody();
+        }
+
+        return $body;
     }
 }

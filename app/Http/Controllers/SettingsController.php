@@ -95,6 +95,14 @@ class SettingsController extends Controller
                     'validator_rules' => [
                         'settings.mail_from' => 'required|email',
                     ],
+                    'settings' => [
+                        'fetch_schedule' => [
+                            'env' => 'APP_FETCH_SCHEDULE',
+                        ],
+                        'mail_password' => [
+                            'safe_password' => true
+                        ]
+                    ],
                 ];
                 break;
             case 'general':
@@ -175,6 +183,7 @@ class SettingsController extends Controller
                     'mail_username'   => Option::get('mail_username', \Config::get('mail.username')),
                     'mail_password'   => Option::get('mail_password', \Config::get('mail.password')),
                     'mail_encryption' => Option::get('mail_encryption', \Config::get('mail.encryption')),
+                    'fetch_schedule'  => config('app.fetch_schedule'),
                 ];
                 break;
             case 'alerts':
@@ -246,6 +255,15 @@ class SettingsController extends Controller
         $cc_required = false;
         $settings_params = $this->getSectionParams($section, 'settings');
         foreach ($settings as $i => $option_name) {
+            // Do not save dummy passwords.
+            if (!empty($settings_params[$option_name])
+                && !empty($settings_params[$option_name]['safe_password'])
+                && $request->settings[$option_name]
+                && preg_match("/^\*+$/", $request->settings[$option_name])
+            ) {
+                continue;
+            }
+
             // Option has to be saved to .env file.
             if (!empty($settings_params[$option_name]) && !empty($settings_params[$option_name]['env'])) {
                 $env_value = $request->settings[$option_name] ?? '';
@@ -274,7 +292,7 @@ class SettingsController extends Controller
 
         // Clear cache if some options have been saved to .env file.
         if ($cc_required) {
-            \Helper::clearCache();
+            \Helper::clearCache(['--doNotGenerateVars' => true]);
         }
 
         \Session::flash('flash_success_floating', __('Settings updated'));

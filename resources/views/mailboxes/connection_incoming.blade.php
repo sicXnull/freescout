@@ -19,7 +19,7 @@
 
     @include('partials/flash_messages')
 
-    <div class="container">
+    <div class="container form-container">
         <div class="row">
             <div class="col-xs-12">
                 <form class="form-horizontal" method="POST" action="">
@@ -77,7 +77,7 @@
                         <label for="in_username" class="col-sm-2 control-label">{{ __('Username') }}</label>
 
                         <div class="col-sm-6">
-                            <input id="in_username" type="text" class="form-control input-sized" name="in_username" value="{{ old('in_username', $mailbox->in_username) }}" maxlength="100" required autofocus>
+                            <input id="in_username" type="text" class="form-control input-sized" name="in_username" value="{{ old('in_username', $mailbox->in_username) }}" maxlength="100" required autofocus {{-- This added to prevent autocomplete in Chrome --}}autocomplete="new-password">
 
                             @include('partials/field_error', ['field'=>'in_username'])
                         </div>
@@ -87,7 +87,7 @@
                         <label for="in_password" class="col-sm-2 control-label">{{ __('Password') }}</label>
 
                         <div class="col-sm-6">
-                            <input id="in_password" type="password" class="form-control input-sized" name="in_password" value="{{ old('in_password', $mailbox->in_password) }}" maxlength="255" required autofocus>
+                            <input id="in_password" type="password" class="form-control input-sized" name="in_password" value="{{ old('in_password', $mailbox->inPasswordSafe()) }}" maxlength="255" required autofocus {{-- This added to prevent autocomplete in Chrome --}}autocomplete="new-password">
 
                             @include('partials/field_error', ['field'=>'in_password'])
                         </div>
@@ -104,6 +104,42 @@
                             </select>
 
                             @include('partials/field_error', ['field'=>'in_encryption'])
+                        </div>
+                    </div>
+
+                    <div class="form-group{{ $errors->has('in_server') ? ' has-error' : '' }}">
+                        <label for="in_imap_folders" class="col-sm-2 control-label">{{ __('IMAP Folders') }}</label>
+
+                        <div class="col-sm-6 flexy">
+                            <select id="in_imap_folders" class="form-control input-sized" name="in_imap_folders[]" multiple>
+                                <option value="INBOX" selected="selected">INBOX</option>
+                                @foreach ($mailbox->getInImapFolders() as $imap_folder)
+                                    <option value="{{ $imap_folder }}" selected="selected">{{ $imap_folder }}</option>
+                                @endforeach
+                            </select>
+
+                            <a href="#" class="btn btn-link btn-sm" data-toggle="tooltip" title="{{ __('Retrieve a list of available IMAP folders from the server') }}" id="retrieve-imap-folders" data-loading-text="{{ __('Retrieving') }}…">{{ __('Get folders') }}</a>
+
+                            @include('partials/field_error', ['field'=>'in_imap_folders'])
+                        </div>
+                    </div>
+
+                    <div class="form-group{{ $errors->has('in_validate_cert') ? ' has-error' : '' }}">
+                        <label for="in_validate_cert" class="col-sm-2 control-label">{{ __('Validate Certificate') }}</label>
+
+                        <div class="col-sm-6">
+                            <div class="controls">
+                                <div class="onoffswitch-wrap">
+                                    <div class="onoffswitch">
+                                        <input type="checkbox" name="in_validate_cert" value="1" id="in_validate_cert" class="onoffswitch-checkbox" @if (old('in_validate_cert', $mailbox->in_validate_cert))checked="checked"@endif >
+                                        <label class="onoffswitch-label" for="in_validate_cert"></label>
+                                    </div>
+
+                                    <i class="glyphicon glyphicon-info-sign icon-info icon-info-inline" data-toggle="popover" data-trigger="hover" data-placement="top" data-content="{{ __('Disable certificate validation if receiving "Certificate failure" error.') }}"></i>
+                                </div>
+                            </div>
+
+                            @include('partials/field_error', ['field'=>'in_validate_cert'])
 
                             <div class="form-help">{!! __("Make sure to save settings before checking connection.") !!}</div>
                         </div>
@@ -120,8 +156,6 @@
                             </button>
                         </div>
                     </div>
-
-                    <div class="margin-top-2"></div>
                 </form>
             </div>
         </div>

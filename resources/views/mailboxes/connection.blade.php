@@ -19,7 +19,7 @@
 
     @include('partials/flash_messages')
 
-    <div class="container">
+    <div class="container form-container">
         <div class="row">
             <div class="col-xs-12">
                 <form class="form-horizontal" method="POST" action="">
@@ -27,8 +27,10 @@
 
                     <div class="descr-block">
                         {!! __("You can read more about sending emails :%a_begin%here:%a_end%.", ['%a_begin%' => '<a href="https://github.com/freescout-helpdesk/freescout/wiki/Sending-emails" target="_blank">', '%a_end%' =>'</a>']) !!}
-                         {!! __("To send system emails via webmail providers (Gmail, Yahoo, etc) use only SMTP method and make sure that SMTP username is equal to the mailbox email address (:%mailbox_email%), otherwise webmail provider won't send emails.", ['%mailbox_email%' => $mailbox->email]) !!}
+
+                        {!! __("To send system emails via webmail providers (Gmail, Yahoo, etc) use only SMTP method and make sure that SMTP username is equal to the mailbox email address (:%mailbox_email%), otherwise webmail provider won't send emails.", ['%mailbox_email%' => $mailbox->email]) !!}
                     </div>
+                    <hr/>
 
                     <div class="form-group margin-top">
                         <label for="email" class="col-sm-2 control-label">{{ __('Method') }} {{--<a href="https://github.com/freescout-helpdesk/freescout/wiki/Sending-emails" target="blank" class="glyphicon glyphicon-info-sign help-icon" data-toggle="tooltip" title="{{ __("Click to read more about sending methods") }}"></a>--}}</label>
@@ -52,30 +54,32 @@
                                     <input type="radio" name="out_method" value="{{ App\Mailbox::OUT_METHOD_SMTP }}" id="out_method_{{ App\Mailbox::OUT_METHOD_SMTP }}" @if ($mailbox->out_method == App\Mailbox::OUT_METHOD_SMTP) checked="checked" @endif> {{ __("SMTP") }}
                                 </label>
                             </div>
+                            <div class="control-group text-help margin-top-10">
+                                <ul>
+                                    <li>
+                                        <a href="https://aws.amazon.com/ses/pricing/" target="_blank">Amazon SES</a> - 
+                                        <span class="text-help">{!! __("62,000 free emails per month from :%a_begin%Amazon EC2:%a_end% server.", ['%a_begin%' => '<a href="https://aws.amazon.com/ec2/" target="_blank">', '%a_end%' => '</a>']) !!}</span>
+                                    </li>
+                                    <li>
+                                        <a href="https://www.mailgun.com" target="_blank">Mailgun</a> - 
+                                        <span class="text-help">{{ __(":number free emails per month.", ['number' => '10,000']) }}</span>
+                                    </li>
+                                    <li>
+                                        <a href="https://www.sendinblue.com/?tap_a=30591-fb13f0&tap_s=294678-0b81e5" target="_blank">SendinBlue</a> - 
+                                        <span class="text-help">{{ __(":number free emails per month.", ['number' => '9,000']) }}</span>
+                                    </li>
+                                    <li>
+                                        <a href="https://www.mailjet.com/?tap_a=25852-4bddf6&tap_s=545617-55177a&aff=545617-55177a" target="_blank">Mailjet</a> - 
+                                        <span class="text-help">{{ __(":number free emails per month.", ['number' => '6,000']) }}</span>
+                                    </li>
+                                </ul>
+                            </div>
                             {{--<div class="control-group">
                                 <label class="radio disabled" for="out_method_elastic">
                                     <input type="radio" name="out_method" disabled value="elastic" id="out_method_elastic" @if ($mailbox->out_method == 'elastic') checked="checked" @endif> <a href="https://elasticemail.com/account#/create-account?r=bc0975e9-3d6b-462f-be7c-629e7672a4a8" target="_blank">Elastic Email</a><br/>
                                     <span class="text-help">{{ __("150,000 free emails per month") }}</span>
                                 </label>
                             </div>--}}
-                            <div class="control-group">
-                                <label class="radio disabled" for="out_method_amazon">
-                                    <input type="radio" name="out_method" disabled value="mailgun" id="out_method_amazon" @if ($mailbox->out_method == 'amazon') checked="checked" @endif> <a href="https://aws.amazon.com/ses/pricing/" target="_blank">Amazon SES</a><br/>
-                                    <span class="text-help">{!! __("62,000 free emails per month from :%a_begin%Amazon EC2:%a_end% server", ['%a_begin%' => '<a href="https://aws.amazon.com/ec2/" target="_blank">', '%a_end%' => '</a>']) !!}</span>
-                                </label>
-                            </div>
-                            <div class="control-group">
-                                <label class="radio disabled" for="out_method_mailgun">
-                                    <input type="radio" name="out_method" disabled value="mailgun" id="out_method_mailgun" @if ($mailbox->out_method == 'mailgun') checked="checked" @endif> <a href="https://www.mailgun.com" target="_blank">Mailgun</a><br/>
-                                    <span class="text-help">{{ __("10,000 free emails per month") }}</span>
-                                </label>
-                            </div>
-                            <div class="control-group">
-                                <label class="radio disabled" for="out_method_mailgun">
-                                    <input type="radio" name="out_method" disabled value="mailgun" id="out_method_mailgun" @if ($mailbox->out_method == 'sendinblue') checked="checked" @endif> <a href="https://www.sendinblue.com/?tap_a=30591-fb13f0&tap_s=294678-0b81e5" target="_blank">SendinBlue</a><br/>
-                                    <span class="text-help">{{ __("9,000 free emails per month") }}</span>
-                                </label>
-                            </div>
                         </div>
                     </div>
 
@@ -85,7 +89,7 @@
                             <label for="out_server" class="col-sm-2 control-label">{{ __('SMTP Server') }}</label>
 
                             <div class="col-sm-6">
-                                <input id="out_server" type="text" class="form-control input-sized" name="out_server" value="{{ old('out_server', $mailbox->out_server) }}" maxlength="255"  @if ($mailbox->out_method == App\Mailbox::OUT_METHOD_SMTP) required @endif autofocus>
+                                <input id="out_server" type="text" class="form-control input-sized" name="out_server" value="{{ old('out_server', $mailbox->out_server) }}" maxlength="255"  @if ($mailbox->out_method == App\Mailbox::OUT_METHOD_SMTP) required @endif autofocus data-smtp-required="true">
 
 
                                 @if (strstr($mailbox->out_server, '.gmail.'))
@@ -110,7 +114,7 @@
                             <label for="out_username" class="col-sm-2 control-label">{{ __('Username') }}</label>
 
                             <div class="col-sm-6">
-                                <input id="out_username" type="text" class="form-control input-sized" name="out_username" value="{{ old('out_username', $mailbox->out_username) }}" maxlength="100" @if ($mailbox->out_method == App\Mailbox::OUT_METHOD_SMTP) required @endif autofocus>
+                                <input id="out_username" type="text" class="form-control input-sized" name="out_username" value="{{ old('out_username', $mailbox->out_username) }}" maxlength="100" @if ($mailbox->out_method == App\Mailbox::OUT_METHOD_SMTP) @endif autofocus {{-- This added to prevent autocomplete in Chrome --}}autocomplete="new-password">
 
                                 @include('partials/field_error', ['field'=>'out_username'])
                             </div>
@@ -119,7 +123,7 @@
                             <label for="out_password" class="col-sm-2 control-label">{{ __('Password') }}</label>
 
                             <div class="col-sm-6">
-                                <input id="out_password" type="password" class="form-control input-sized" name="out_password" value="{{ old('out_password', $mailbox->out_password) }}" maxlength="255" @if ($mailbox->out_method == App\Mailbox::OUT_METHOD_SMTP) required @endif autofocus>
+                                <input id="out_password" type="password" class="form-control input-sized" name="out_password" value="{{ old('out_password', $mailbox->outPasswordSafe()) }}" maxlength="255" @if ($mailbox->out_method == App\Mailbox::OUT_METHOD_SMTP) @endif autofocus {{-- This added to prevent autocomplete in Chrome --}}autocomplete="new-password">
 
                                 @include('partials/field_error', ['field'=>'out_password'])
                             </div>
@@ -128,7 +132,7 @@
                             <label for="out_encryption" class="col-sm-2 control-label">{{ __('Encryption') }}</label>
 
                             <div class="col-sm-6">
-                                <select id="out_encryption" class="form-control input-sized" name="out_encryption" @if ($mailbox->out_method == App\Mailbox::OUT_METHOD_SMTP) required @endif autofocus>
+                                <select id="out_encryption" class="form-control input-sized" name="out_encryption" @if ($mailbox->out_method == App\Mailbox::OUT_METHOD_SMTP) required @endif autofocus data-smtp-required="true">
                                     <option value="{{ App\Mailbox::OUT_ENCRYPTION_NONE }}" @if (old('out_encryption', $mailbox->out_encryption) == App\Mailbox::OUT_ENCRYPTION_NONE)selected="selected"@endif>{{ __('None') }}</option>
                                     <option value="{{ App\Mailbox::OUT_ENCRYPTION_SSL }}" @if (old('out_encryption', $mailbox->out_encryption) == App\Mailbox::OUT_ENCRYPTION_SSL)selected="selected"@endif>{{ __('SSL') }}</option>
                                     <option value="{{ App\Mailbox::OUT_ENCRYPTION_TLS }}" @if (old('out_encryption', $mailbox->out_encryption) == App\Mailbox::OUT_ENCRYPTION_TLS)selected="selected"@endif>{{ __('TLS') }}</option>
@@ -140,7 +144,7 @@
                         <hr/>
                     </div>
                     
-                    <div class="form-group margin-bottom-0">
+                    {{--<div class="form-group margin-bottom-0">
                         <label class="col-sm-2 control-label">{{ __('Improve Delivery') }}</label>
 
                         <div class="col-sm-6">
@@ -194,7 +198,7 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </div>--}}
 
                     <div class="form-group">
                         <label for="send_test" class="col-sm-2 control-label">{{ __('Send Test To') }}</label>
@@ -217,8 +221,6 @@
                             </button>
                         </div>
                     </div>
-
-                    <div class="margin-top-40"></div>
                 </form>
             </div>
         </div>

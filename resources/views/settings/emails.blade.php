@@ -1,6 +1,7 @@
 <form class="form-horizontal margin-top" method="POST" action="">
     {{ csrf_field() }}
 
+    <h3>{{ __('System Emails') }}</h3>
     <div class="descr-block">
         <p>{{ __("These settings are used to send system emails (alerts to admin and invitation emails to users).") }}</p>
 
@@ -64,7 +65,7 @@
             <label for="mail_username" class="col-sm-2 control-label">{{ __('Username') }}</label>
 
             <div class="col-sm-6">
-                <input id="mail_username" type="text" class="form-control input-sized" name="settings[mail_username]" value="{{ old('settings.mail_username', $settings['mail_username']) }}" maxlength="100" @if ($settings['mail_driver'] == \MailHelper::MAIL_DRIVER_SMTP) required @endif autofocus>
+                <input id="mail_username" type="text" class="form-control input-sized" name="settings[mail_username]" value="{{ old('settings.mail_username', $settings['mail_username']) }}" maxlength="100" autofocus {{-- This added to prevent autocomplete in Chrome --}}autocomplete="new-password">
                 @include('partials/field_error', ['field'=>'settings.mail_username'])
             </div>
         </div>
@@ -72,7 +73,7 @@
             <label for="mail_password" class="col-sm-2 control-label">{{ __('Password') }}</label>
 
             <div class="col-sm-6">
-                <input id="mail_password" type="password" class="form-control input-sized" name="settings[mail_password]" value="{{ old('settings.mail_password', $settings['mail_password']) }}" maxlength="255" @if ($settings['mail_driver'] == \MailHelper::MAIL_DRIVER_SMTP) required @endif autofocus>
+                <input id="mail_password" type="password" class="form-control input-sized" name="settings[mail_password]" value="{{ old('settings.mail_password', \Helper::safePassword($settings['mail_password'])) }}" maxlength="255" autofocus {{-- This added to prevent autocomplete in Chrome --}}autocomplete="new-password">
 
                 @include('partials/field_error', ['field'=>'settings.mail_password'])
             </div>
@@ -104,6 +105,23 @@
                 </span>
             </div>
             <div class="form-help">{!! __("Make sure to save settings before testing.") !!}</div>
+        </div>
+    </div>
+
+    <hr/>
+    <h3>{{ __('Fetching Emails') }}</h3>
+    <div class="form-group{{ $errors->has('settings.fetch_schedule') ? ' has-error' : '' }}">
+        <label for="fetch_schedule" class="col-sm-2 control-label">{{ __('Fetch Mail Schedule') }}</label>
+
+        <div class="col-sm-6">
+            <select id="fetch_schedule" class="form-control input-sized" name="settings[fetch_schedule]">
+                <option value="{{ \MailHelper::FETCH_SCHEDULE_EVERY_MINUTE }}" @if (old('settings.fetch_schedule', $settings['fetch_schedule']) == \MailHelper::FETCH_SCHEDULE_EVERY_MINUTE)selected="selected"@endif>{{ __('Every minute') }}</option>
+                <option value="{{ \MailHelper::FETCH_SCHEDULE_EVERY_FIVE_MINUTES }}" @if (old('settings.fetch_schedule', $settings['fetch_schedule']) == \MailHelper::FETCH_SCHEDULE_EVERY_FIVE_MINUTES)selected="selected"@endif>{{ __('Every 5 minutes') }}</option>
+                <option value="{{ \MailHelper::FETCH_SCHEDULE_EVERY_TEN_MINUTES }}" @if (old('settings.fetch_schedule', $settings['fetch_schedule']) == \MailHelper::FETCH_SCHEDULE_EVERY_TEN_MINUTES)selected="selected"@endif>{{ __('Every 10 minutes') }}</option>
+                <option value="{{ \MailHelper::FETCH_SCHEDULE_EVERY_FIFTEEN_MINUTES }}" @if (old('settings.fetch_schedule', $settings['fetch_schedule']) == \MailHelper::FETCH_SCHEDULE_EVERY_FIFTEEN_MINUTES)selected="selected"@endif>{{ __('Every 15 minutes') }}</option>
+                <option value="{{ \MailHelper::FETCH_SCHEDULE_EVERY_THIRTY_MINUTES }}" @if (old('settings.fetch_schedule', $settings['fetch_schedule']) == \MailHelper::FETCH_SCHEDULE_EVERY_THIRTY_MINUTES)selected="selected"@endif>{{ __('Every 30 minutes') }}</option>
+                <option value="{{ \MailHelper::FETCH_SCHEDULE_HOURLY }}" @if (old('settings.fetch_schedule', $settings['fetch_schedule']) == \MailHelper::FETCH_SCHEDULE_HOURLY)selected="selected"@endif>{{ __('Hourly') }}</option>
+            </select>
         </div>
     </div>
 

@@ -43,7 +43,7 @@
 
                         <!-- Branding Image -->
                         <a class="navbar-brand {{ \App\Misc\Helper::menuSelectedHtml('dashboard') }}" href="{{ url('/') }}" title="{{ __('Dashboard') }}">
-                            <img src="/img/logo-brand.png" />
+                            <img src="{{ asset('img/logo-brand.png') }}" />
                             {{-- config('app.name', 'FreeScout') --}}
                         </a>
                     </div>
@@ -52,7 +52,11 @@
                         <!-- Left Side Of Navbar -->
                         <ul class="nav navbar-nav">
                             @php
-                                $mailboxes = Auth::user()->mailboxesCanView();
+                                $cache_mailboxes = false;
+                                if (\Helper::isRoute('conversations.view')) {
+                                    $cache_mailboxes = true;
+                                }
+                                $mailboxes = Auth::user()->mailboxesCanView($cache_mailboxes);
                             @endphp
                             @if (count($mailboxes) == 1)
                                 <li class="{{ \App\Misc\Helper::menuSelectedHtml('mailbox') }}"><a href="{{ route('mailboxes.view', ['id'=>$mailboxes[0]->id]) }}">{{ __('Mailbox') }}</a></li>
@@ -113,7 +117,7 @@
                                             {{--<li><a href="#">{{ __('Teams') }} (todo)</a></li>--}}
                                             <li class="{{ \App\Misc\Helper::menuSelectedHtml('users') }}"><a href="{{ route('users') }}">{{ __('Users') }}</a></li>
                                             <li class="{{ \App\Misc\Helper::menuSelectedHtml('modules') }}"><a href="{{ route('modules') }}">{{ __('Modules') }}</a></li>
-                                            <li class=""><a href="/translations">{{ __('Translate') }}</a></li>
+                                            <li class=""><a href="{{ asset('translations') }}">{{ __('Translate') }}</a></li>
                                             <li class="{{ \App\Misc\Helper::menuSelectedHtml('logs') }}"><a href="{{ route('logs') }}">{{ __('Logs') }}</a></li>
                                             <li class="{{ \App\Misc\Helper::menuSelectedHtml('system') }}"><a href="{{ route('system') }}">{{ __('System') }}</a></li>
                                         @endif
@@ -181,7 +185,7 @@
                                 <li class="dropdown">
 
                                     <a href="#" class="dropdown-toggle dropdown-toggle-icon dropdown-toggle-account" data-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" v-pre title="{{ __('Account') }}">
-                                        <i class="glyphicon glyphicon-user"></i> <span class="nav-user">{{ Auth::user()->first_name }}</span> <span class="caret"></span>
+                                        <span class="photo-sm">@include('partials/person_photo', ['person' => Auth::user()])</span>&nbsp;<span class="nav-user">{{ Auth::user()->first_name }}</span> <span class="caret"></span>
                                     </a>
 
                                     <ul class="dropdown-menu">
@@ -258,9 +262,23 @@
     @include('partials/floating_flash_messages')
 
     @yield('body_bottom')
+    @action('layout.body_bottom')
 
     {{-- Scripts --}}
-    {!! Minify::javascript(\Eventy::filter('javascripts', array('/js/jquery.js', '/js/bootstrap.js', '/js/laroute.js', '/js/lang.js', '/js/vars.js', '/js/parsley/parsley.min.js', '/js/parsley/i18n/'.Config::get('app.locale').'.js', '/js/select2/select2.full.min.js', '/js/polycast/polycast.js', '/js/push/push.min.js', '/js/featherlight/featherlight.min.js', '/js/featherlight/featherlight.gallery.min.js', '/js/taphold.js', '/js/main.js'))) !!}
+    @php
+        try {
+    @endphp
+    {!! Minify::javascript(\Eventy::filter('javascripts', array('/js/jquery.js', '/js/bootstrap.js', '/js/lang.js', '/storage/js/vars.js', '/js/laroute.js', '/js/parsley/parsley.min.js', '/js/parsley/i18n/'.strtolower(Config::get('app.locale')).'.js', '/js/select2/select2.full.min.js', '/js/polycast/polycast.js', '/js/push/push.min.js', '/js/featherlight/featherlight.min.js', '/js/featherlight/featherlight.gallery.min.js', '/js/taphold.js', '/js/main.js'))) !!}
+    @php
+        } catch (\Exception $e) {
+            // To prevent 500 errors on update.
+            // After some time this can be removed.
+            if (strstr($e->getMessage(), 'vars.js')) {
+                \Artisan::call('freescout:generate-vars');
+            }
+            \Helper::logException($e);
+        }
+    @endphp
     @yield('javascripts')
     @if ($__env->yieldContent('javascript'))
         <script type="text/javascript">
